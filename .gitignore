@@ -1,6 +1,11 @@
+#Ignore Python cache
 __pycache__/
 *.pyc
 *.pyo
+
+#Ignore macOS system files
 .DS_Store
+
+#Ignore big files
 data/
 *.pth
