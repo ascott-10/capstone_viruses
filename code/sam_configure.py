@@ -56,25 +56,23 @@ def download_sam():
   )
   
   return mask_generator
-  
-######## test #########
-
-def test(im_path_line):
-
-    
-    df = pd.read_csv('raw_filepaths.csv')
-    im_path = df.iloc[im_path_line, 0]
-    
-    print(f"Loading image: {im_path}")  
-
 
 ################ Workflow to preprocess input images images ################
 ###################
 def sam_workflow(mask_generator, im_path_line):  
     
     df = pd.read_csv('raw_filepaths.csv')
+    
+    #User should enter a row number to select an image file path
+    if im_path_line is None:
+        im_path_line = int(input(f"Enter the row number (0-{len(df)-1}) to select an image: "))
+    
     im_path = df.iloc[im_path_line, 0]
     
+ 
+    
+
+     
     
     image_orig = cv2.imread(im_path) #input is image path
     image = cv2.cvtColor(image_orig, cv2.COLOR_BGR2RGB)
@@ -152,16 +150,16 @@ def sam_workflow(mask_generator, im_path_line):
     plt.imshow(image)
     plt.gca().add_patch(Rectangle((x_xten,y_xten),(w_xten),(h_xten), fill = False))
     for k in range(0,len(x_coords)):
-      plt.gca().add_patch(Rectangle((x_coords[k],y_coords[k]),w_coords[k],h_coords[k], fill = False))
+      plt.gca().add_patch(Rectangle((x_coords[1],y_coords[1]),w_coords[1],h_coords[1], fill = False))
     plt.axis('off')
     plt.xlim([0, width])   
     plt.ylim([height, 0])  
     
     
     plt.show(block = False)
-    plt.pause(0.0001)
-    plt.waitforbuttonpress(timeout=5)
-    plt.close()
+    #plt.pause(0.0001)
+    plt.waitforbuttonpress(timeout=100)
+    #plt.close()
     
     # Determine the save path based on the filename
     #filename = os.path.basename(im_path)
