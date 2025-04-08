@@ -5,16 +5,16 @@
 ## Repository Structure
 
 - `code/`: Code for loading data and modeling
-- `data/`: Raw image data
-- `notebooks/`: Jupyter notebooks
-- `main.py`: Main runner script
+- `main.py`: Main script
 
 # Getting Started
 
 ## Installation
 
-git clone https://github.com/ascott-10/capstone-viruses.git
+git clone https://github.com/ascott-10/capstone-viruses.git 
+
 cd capstone-viruses
+
 pip install -r requirements.txt
 
 ## Other items needed
