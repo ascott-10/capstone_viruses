@@ -4,21 +4,30 @@ import os
 import sys
 import pandas as pd
 
-def input_files(im_path_mut=None, im_path_wt=None):
+def input_files(im_path_mut = None, im_path_wt = None):
     """
     
     Inputs: raw folder path names
-    Defaults to personal files for now, inputs are file paths
+    
+    
     
     Outputs: df with list of all folder paths, and class (useful for classification)
     Also saves to csv
     
     """
-    if im_path_mut is None:
-        im_path_mut = '/home/ariellescott/Documents/capstone/data/raw_images/raw_mutant/'
-    if im_path_wt is None:
-        im_path_wt = '/home/ariellescott/Documents/capstone/data/raw_images/raw_wt/'
+    #Either prompt the user or change the paths here
+    im_path_mut = im_path_mut
+    if im_path_mut == None:
+      im_path_wt = '/home/ariellescott/Documents/capstone/capstone-viruses/data/raw_images/raw_wt/'
+      im_path_mut = '/home/ariellescott/Documents/capstone/capstone-viruses/data/raw_images/raw_mutant/'
+    else: 
+      im_path_mut = input('Enter a file path for mutant images')
+      im_path_wt = input('Enter a file path for wildtype images')
     
+    
+    #Can change the output name
+    filepath_output = '/home/ariellescott/Documents/capstone/capstone-viruses/data/output/raw_filepaths.csv'
+        
     image_filepaths_mut = []
     image_filepaths_wt = []
     
@@ -38,29 +47,13 @@ def input_files(im_path_mut=None, im_path_wt=None):
 }
 
     df = pd.DataFrame(data)
-
-    df.to_csv('raw_filepaths.csv', index=False)
+    
+    
+    #Enter an output filepath
+    df.to_csv(filepath_output, index=False)
     
     print(f"Saved csv")
     
     return df
-
-#If user runs from command line
-#sys.argv[0] is always the name of the script (input_files.py)
-#sys.argv[0] = 'input_files.py'
-#sys.argv[1] = '/path/to/mutant'
-#sys.argv[2] = '/path/to/wildtype'
-
-if __name__ == "__main__":
-
-    #if user provides 2 commands --> use user input files
-    if len(sys.argv) == 3:
-        mut_path = sys.argv[1]
-        wt_path = sys.argv[2]
-        df = input_files(mut_path, wt_path)
-    else:
-        #otherwise use the hardcoded files
-        df = input_files()
-    
 
     print(df.head())
