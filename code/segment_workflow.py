@@ -16,26 +16,18 @@ from matplotlib.patches import Rectangle
 
 
 ################ Workflow to preprocess input images images #########
-def load_image(df = None, im_path_lines = None):
-
+def load_image(df = None): 
   
   image_ls = []
   #image is either loaded from the df generated from a previous code, or can be generated from a csv 
   if df is None:
     df = "/home/ariellescott/Documents/capstone/capstone-viruses/code/raw_filepaths.csv"
-    #df = pd.read_csv(input('enter a csv with image filepaths '))
-      
-  #User should enter a row number to select an image file path
-  if im_path_lines is None:
-    im_path_lines = list(input('Enter row numbers '))
-  else:
-    im_path_lines = list(im_path_lines)
-      
     
-  for i in range(0,len(im_path_lines)):
+    
+  for i in range(0,len(df.index)):
     
     #Get the image path
-    im_path = df.iloc[im_path_lines[i], 0]   
+    im_path = df.iloc[i, 0]   
     
     #Read the image
     image_orig = cv2.imread(im_path) #input is image path
@@ -48,15 +40,15 @@ def load_image(df = None, im_path_lines = None):
     
     image_ls.append(image)
     
-    print('images loaded')
+    print('image', str(i), 'loaded')
     
-    
+  #Return list of images  
   return image_ls
 
 
 
 
-################ Workflow to preprocess input images images #########
+################ Workflow to preprocess input images #########
 def generate_masks(image, mask_generator):
 
     
@@ -95,7 +87,7 @@ def generate_masks(image, mask_generator):
     ####Body#####
     # Assign the first mask (most centered large object) as "body", rest as "spikes"
     x_body, y_body, w_body, h_body  = masks[1]['bbox']
-    extend = 60 #Create box around the body to include the spikes
+    extend = 75 #Create box around the body to include the spikes
     x_xten, y_xten, w_xten, h_xten = (x_body-extend),(y_body-extend),(w_body+(2*extend)),(h_body+2*extend)
 
     #Temporary storage of x and y coordinates for specified range
@@ -134,14 +126,42 @@ def generate_masks(image, mask_generator):
     
     
     
-    print('masks generated')
+    print('mask', str(i), 'generated')
       
     body_bbox = {'x': x_xten, 'y': y_xten, 'w': w_xten, 'h': h_xten}
     
-    return image, segmentation_map, body_bbox
+    return segmentation_map, body_bbox
 
    
-################ Workflow to postprocess input images images #########
+
+def display_images(image_ls, segmentation_map_ls, new_seg_map_ls, pred_num_spikes_ls): 
+  
+  fig_width = len(image_ls) * 2  
+  fig_height = 6  
+  fig, ax = plt.subplots(3, len(image_ls), figsize=(fig_width, fig_height), squeeze=False)
+
+  
+  for i in range(0,len(image_ls)):
+    ax[0,i].imshow(image_ls[i])
+    #ax[0,i].set_title('Original Image')
+    ax[0,i].set_title(f'Spikes: {pred_num_spikes_ls[i]}')
+    ax[0,i].axis('off')
+    
+    ax[1,i].imshow(segmentation_map_ls[i])
+    #ax[1,i].set_title('Segmented Mask')
+    ax[1,i].axis('off')
+    
+    ax[2,i].imshow(new_seg_map_ls[i])
+
+    ax[2,i].axis('off')
+  plt.subplots_adjust(hspace = 0.01, wspace = 0.01)
+  
+  plt.waitforbuttonpress()
+
+  plt.close()
+  
+  sys.exit(0)
+      
 def postprocess_mask(segmentation_map, body_bbox):
 
   height, width = segmentation_map.shape[:2]
@@ -173,41 +193,25 @@ def postprocess_mask(segmentation_map, body_bbox):
   
   print('Num spikes:  ', num_spikes)
   
-  
-  
-  
-   
   return new_seg_map, num_spikes
-
-
-def display_images(image_ls, segmentation_map_ls, new_seg_map_ls, pred_num_spikes): 
   
-  fig_width = len(image_ls) * 2  
-  fig_height = 6  
-  fig, ax = plt.subplots(3, len(image_ls), figsize=(fig_width, fig_height), squeeze=False)
-
+def save_masks(im_path, new_seg_map):
   
-  for i in range(0,len(image_ls)):
-    ax[0,i].imshow(image_ls[i])
-    #ax[0,i].set_title('Original Image')
-    ax[0,i].set_title(f'Spikes: {pred_num_spikes[i]}')
-    ax[0,i].axis('off')
+    filename = os.path.basename(im_path)
+    save_dir = "/home/ariellescott/Documents/capstone/capstone-viruses/data/output/sam_segment_processed/"
+    os.makedirs(save_dir, exist_ok=True)
+     
+
+    #Add '_seg_ver2' before the extension
+    filename_without_ext, ext = os.path.splitext(filename)
+    new_filename = f"{filename_without_ext}_seg_ver2{ext}"
     
-    ax[1,i].imshow(segmentation_map_ls[i])
-    #ax[1,i].set_title('Segmentated Mask')
-    ax[1,i].axis('off')
+
+    #Save the segmentation mask
+    mask_path = os.path.join(save_dir, new_filename)
+    cv2.imwrite(mask_path, new_seg_map)
+    print('saved', new_filename)
     
-    ax[2,i].imshow(new_seg_map_ls[i])
-
-    ax[2,i].axis('off')
-  plt.subplots_adjust(hspace = 0.01, wspace = 0.01)
-  plt.show()
-  plt.waitforbuttonpress()
-
-  # Close the plot
-  plt.close()
-  
-  # Exit Python cleanly
-  sys.exit(0)
-      
-  
+    
+    
+    return mask_path

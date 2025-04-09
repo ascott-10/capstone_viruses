@@ -28,43 +28,85 @@ print('Import libraries good')
 
 import input_files
 
+#Create the dataframe to store the filepaths of the raw datafiles
 df = input_files.input_files()
 
 print(df.head())
-
 
 ############ Configure Sam #################
 
 import sam_configure
 
+#Download the sam model
 sam = sam_configure.download_sam()
+
+#Create the mask generator object
 mask_generator = sam_configure.custom_mask(sam)
 
 ############ Segmentation #################
-
 import segment_workflow
 
-num_ims = 8
-random_indices = np.random.choice(len(df), size=num_ims, replace=False)
+### To load raw images ###
+#Input is the dataframe of the raw image file filepaths
+#Output is the list of images
+image_ls = segment_workflow.load_image(df)
 
-image_ls = segment_workflow.load_image(df, random_indices)
-map_ls = []
-body_bbox_ls = []
-new_seg_map_ls = []
-pred_num_spikes = []
-for i in range(0,len(image_ls)):
-  image = image_ls[i]
-  _, mask, body_bbox = segment_workflow.generate_masks(image, mask_generator) #avoid appending twice
-  map_ls.append(mask)
-  body_bbox_ls.append(body_bbox)
+### To make original masks ###
+map_ls = [] #segmentation maps (without adjustments)
+body_bbox_ls = [] #bounding boxes for adjustments
+for i in range(0,len(image_ls)): #For i in range (0, length of raw image list)
+    image = image_ls[i] #set current image
+    mask, body_bbox = segment_workflow.generate_masks(image, mask_generator) #generate masks for objects in current image
+  #Save masks, bounding boxes
+    map_ls.append(mask) #Original mask without adjustments
+    body_bbox_ls.append(body_bbox) #bounding box to make adjustments
 
-for i in range(0,len(map_ls)):
-  segmentation_map = map_ls[i]
-  body_bbox = body_bbox_ls[i]
-  new_seg_map, num_spikes = segment_workflow.postprocess_mask(segmentation_map, body_bbox)
+### To make processed masks ###
+new_seg_map_ls = [] #segmentation maps with adjustments
+pred_num_spikes_ls = [] #predicted number of spikes
+for i in range(0,len(map_ls)): #for i in range (0, length of mask list)
+  segmentation_map = map_ls[i] #set current mask
+  body_bbox = body_bbox_ls[i] #set current bounding box
+  new_seg_map, num_spikes = segment_workflow.postprocess_mask(segmentation_map, body_bbox) #generate new mask, predicted #spikes
+  #Save new masks, predicted number of spikes
   new_seg_map_ls.append(new_seg_map)
-  pred_num_spikes.append(num_spikes)
+  pred_num_spikes_ls.append(num_spikes)
 
-segment_workflow.display_images(image_ls, map_ls, new_seg_map_ls, pred_num_spikes)
+### To save processed masks ###
+updated_mask_path_ls = [] #filepaths for new masks
+for i in range(0, len(image_ls)): #for i in range(0,len(file paths of original images))
+  im_path = df.iloc[i,0] #original file path name
+  new_seg_map = new_seg_map_ls[i] #set current image 
+  updated_mask_path = segment_workflow.save_masks(im_path, new_seg_map)
+  updated_mask_path_ls.append(updated_mask_path)
 
 
+############ Make a Results df #################
+
+#For the df file name
+file_ends = []
+for i in range(0,len(updated_mask_path_ls)):
+    im_path = df.iloc[i,0]
+    filename = os.path.splitext(os.path.basename(im_path))[0]
+    file_ends.append(filename)
+  
+
+df = pd.DataFrame({'File_name': file_ends, 
+'New mask path':updated_mask_path_ls,
+'Pred_spike_count': pred_num_spikes_ls})
+  
+
+print(df.head())
+
+#Print to csv
+output_csv_path = '/home/ariellescott/Documents/capstone/capstone-viruses/data/output/sam_seg_results_ver2.csv'
+
+#save df to csv
+df.to_csv(output_csv_path, index=False)  # index=False to avoid writing row numbers as a column
+
+
+#########Visualize######
+segment_workflow.display_images(image_ls, map_ls, new_seg_map_ls, pred_num_spikes_ls)
+
+
+sys.exit(0)
