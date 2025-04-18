@@ -9,24 +9,23 @@ def input_files(im_path_mut = None, im_path_wt = None):
     
     Inputs: raw folder path names
     
-    
-    
     Outputs: df with list of all folder paths, and class (useful for classification)
     Also saves to csv
     
     """
     #Either prompt the user or change the paths here
+
     im_path_mut = im_path_mut
-    if im_path_mut == None:
-      im_path_wt = '/home/ariellescott/Documents/capstone/capstone-viruses/data/raw_images/raw_wt/'
-      im_path_mut = '/home/ariellescott/Documents/capstone/capstone-viruses/data/raw_images/raw_mutant/'
-    else: 
-      im_path_mut = input('Enter a file path for mutant images')
-      im_path_wt = input('Enter a file path for wildtype images')
+    if im_path_mut is None and im_path_wt is None:
+      im_path_wt = input('Enter a file path for wildtype images: ')
+      im_path_mut = input('Enter a file path for mutant images: ')
+    else:
+        im_path_wt = im_path_wt or '/path/to/wt'
+        im_path_mut = im_path_mut or '/path/to/mutant'
     
     
     #Can change the output name
-    filepath_output = '/home/ariellescott/Documents/capstone/capstone-viruses/data/output/raw_filepaths.csv'
+    filepath_output = '/home/ascott10/documents/projects/capstone_viruses/results/raw_filepaths.csv'
         
     image_filepaths_mut = []
     image_filepaths_wt = []
@@ -52,8 +51,7 @@ def input_files(im_path_mut = None, im_path_wt = None):
     #Enter an output filepath
     df.to_csv(filepath_output, index=False)
     
-    print(f"Saved csv")
+    print(f"Saved filepaths to csv")
     
     return df
 
-    print(df.head())

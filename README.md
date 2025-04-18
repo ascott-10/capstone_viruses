@@ -1,84 +1,94 @@
-# Capstone Project
+# Capstone Project – Virus Segmentation and Morphology Analysis
 
-# Description
+## Description
+
+This repository contains a pipeline to perform segmentation and morphological analysis on EM images of viruses using Meta AI's Segment Anything Model (SAM). The goal is to isolate the viral body and spikes, compute relevant features (area, perimeter), and export processed masks and statistics.
 
 ## Repository Structure
 
-- `code/`: Code for loading data and modeling
-- `main.py`: Main script
+- `main_sam_pipeline.py`: Main script to execute the full workflow  
+- `code/`:
+  - `input_files.py`: Builds dataframe of image paths and labels  
+  - `sam_configure.py`: Loads pretrained SAM model and sets hyperparameters  
+  - `segment_workflow.py`: Contains functions for segmentation, cropping, feature extraction, and saving  
+- `raw_images/`: Input folders for wildtype and mutant virus images  
+- `segmented_images/sam_segment_ver3/`: Output location for final segmented masks  
+- `results/`: Stores summary CSVs of segmentation outputs  
 
 # Getting Started
 
 ## Installation
 
-git clone https://github.com/ascott-10/capstone-viruses.git 
-
+```bash
+git clone https://github.com/ascott-10/capstone-viruses.git
 cd capstone-viruses
-
 pip install -r requirements.txt
+```
 
 ## Other items needed
 
 - Follow installation instructions for Segment Anything model from https://github.com/facebookresearch/segment-anything/
-- Downloaded the checkpoint .pth file for the 'sam_vit_h_4b8939' model to stay consistent with the model used in this project
+- Download the checkpoint `.pth` file for the `sam_vit_h_4b8939` model to stay consistent with the model used in this project
 - Place the model in the appropriate directory for your project
 
 ## System Requirements (Project tested on):
 
-- Ubuntu 22.04
-- Python 3.12
-- CUDA 12.4
-- Pytorch 2.1
+- Ubuntu 22.04  
+- Python 3.12  
+- CUDA 12.4  
+- Pytorch 2.1  
 - NVIDIA GPU (RTX 3090)
 
 # Usage Instructions
-
 
 ## Setup
 
 ### 1. Set up the file inputs
 
-First, the user should have a directory of raw images. This project used EM images of viruses, split into two groups. All images were 750x750, with the virus body centered in the middle. 
+If the user has a directory of raw images that they wish to convert to segmented masks, they should proceed through the main_sam_pipeline.py script process. If they already have their generated masks and wish to get statistics on them or classify them, they should take note of where they are stored and skip these steps. 
 
-in input_files.py, the user can enter their file paths or setup the prompts to users enter it later. 
-This code will output a dataframe of filepaths and classes that will be called on later. It also creates a csv of this information, can change the filename here also. 
+First, the user should have a directory of raw images. This project used EM images of viruses, split into two groups. All images were 750x750, with the virus body centered in the middle.
 
-When running main.py, the user will be prompted if they will be using the default filepaths, which can be hardcoded into input_files to avoid having to type them on the command line.
+In `input_files.py`, the user can enter their file paths or set up prompts to enter them interactively.  
+This code will output a dataframe of filepaths and classes that will be used later. It also creates a CSV version of this information that can be reused — filename can be customized as needed.
+
+When running `main_sam_pipeline.py`, the user will be prompted whether to use default filepaths, which can be hardcoded in `input_files.py` to avoid typing them on the command line.
 
 ### 2. Configure SAM
 
-Next, make sure the SAM model (in this case sam_vit_h_4b8939.pth) has been downloaded. sam_configure can be modified to input the path. 
+Make sure the SAM model (`sam_vit_h_4b8939.pth`) has been downloaded.
 
-In main.py, configure_sam.download_sam() is called once to download the model and returns the model sam. With sam as input, configure_sam.custom_mask(sam) is the place to customize all sam inputs. This generates the mask generator object to be used on the images.
+In `main.py`, `download_sam()` is called once to load the model and returns a SAM instance.  
+Then `custom_mask(sam)` returns a configured mask generator object. You can pass `use_defaults=False` to override mask parameters.
 
 ### 3. Segmentation
 
-In the next steps, the user applies the segmentation masks to their images. The images are loaded from their df made in earlier steps in main.py
+The segmentation step consists of several function calls:
 
-To get the segmentation process started, in main.py, the user first inputs their dataframe of filepaths (or it is automatically loaded) and which files in the load_image module. This outputs a list of images.
+- `load_image(df)`: Loads all images as RGB from the filepath DataFrame.
+- `generate_masks(image, mask_generator)`: Uses SAM to segment each image. The largest mask is assumed to be the viral body; masks within a 75-pixel extended bounding box are labeled as spikes. A grayscale mask is returned.
+- `postprocess_mask(segmentation_map, body_bbox)`: Crops the mask to focus on the body and nearby spikes. Computes spike count, total spike area, average spike area, and body/spike perimeters using OpenCV.
+- `save_masks(im_path, new_seg_map, save_dir)`: Saves each cropped mask to `segmented_images/sam_segment_ver3/` with `_seg_ver3` added to the filename.
 
-This list is then used in the next function, generate_masks, along with the mask_generator that was created previously. The segmentation will run for each image in the list.
+Each function is called iteratively on the image set. Metrics are collected in lists and merged into DataFrames.
 
-During the segmentation, function will use SAM to generate the masks. It then uses the properties from SAM to find each mask's area and the euclidean distance from the center. It sorts the masks by center distance and area. The code then generalizes to say the largest mask is the background. The second largest mask is the body, and the rest are spikes.The masks are colored accordingly; here they are assigned on a grayscale.
+In the postprocessing step, spike features are stored per component, including area and perimeter. These are written to `results/all_component_areas.csv`. A separate summary with spike count per image is written to `results/sam_summary_results_2.csv`.
 
-Next a box is drawn around the body based on an extended distance of 75, which should also generally include the spikes. The first mask segmentation mask would have included anything not a body as a spike, but instead these will be set as "not a spike, not a body, not a background". 
+### 4. Run a quick test
 
-Optionally, a rectangle is drawn to identify where the extended bounding box is just for visualization and testing purposes is, but for now this part is commented out. 
+To test the pipeline on a few images only, modify `df` in `main.py`:
 
-The output of generate_masks are the masks that correspond to the image inputs ('segmentation_map), which, in the main function, are then fed into display_images for a sample visualization. It also returns the coordinates for the bounding box of the body's mask, which will be used in the post-processing of the mask.
+```python
+df = df.iloc[:2]  # run on first 2 images
+```
 
-In the main function, the outputs are being appending to lists in order to be used in iterations since the functions are generally built to handle single inputs. 
+## Output Files
 
-The next task is to then post-process the mask; that is, to remove the area that is not centered around the virus body and its associated spikes. The inputs are the segmentation map, or the complete mask, and the bounding box which includes the body and its spikes. The outputs of this function are a new mask with the entire background roughly blacked out as well as a predicted number of spikes.
+- Segmented images: `segmented_images/sam_segment_ver3/`
+- CSV summaries:
+  - `results/all_component_areas.csv`: Area and perimeter stats for body and spike components per image
+  - `results/sam_summary_results_2.csv`: File-level summary of predicted spike count and saved mask path
 
-Finally, the original image, the pre-processed mask and the post-processed mask along with the predicted number of spikes is displayed.
-
-Within the main function, the user can choose to display how many images to use, or can choose specific rows from their dataframe. 
-
-
-
-## Citations 
+## Citations
 
 Alexander Kirillov, Eric Mintun, Nikhila Ravi, Hanzi Mao, Chloe Rolland, Laura Gustafson, Tete Xiao, Spencer Whitehead, Alexander C. Berg, Wan-Yen Lo, Piotr Dollár, and Ross Girshick. Segment Anything. arXiv preprint arXiv:2304.02643, 2023.
-
-

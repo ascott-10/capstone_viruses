@@ -7,5 +7,10 @@ __pycache__/
 .DS_Store
 
 #Ignore big files
-data/
 *.pth
+
+#Ignore big folders
+data/
+notebooks/
+raw_images/
+segmented_images/
