@@ -14,3 +14,6 @@ data/
 notebooks/
 raw_images/
 segmented_images/
+
+#Ignore anything saying testing
+*testing*
