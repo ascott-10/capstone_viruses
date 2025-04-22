@@ -2,20 +2,24 @@
 
 ## Description
 
-This repository contains a pipeline to perform segmentation and morphological analysis on EM images of viruses using Meta AI's Segment Anything Model (SAM). The goal is to isolate the viral body and spikes, compute relevant features (area, perimeter), and export processed masks and statistics.
+This repository contains a pipeline to perform segmentation and morphological analysis on EM images of viruses using Meta AI's Segment Anything Model (SAM) and classification using a ResNet18-based model. The goal is to isolate the viral body and spikes, compute relevant features (area, perimeter), and classify viral images as wildtype or mutant based on morphology.
 
 ## Repository Structure
 
-- `main_sam_pipeline.py`: Main script to execute the full workflow  
-- `code/`:
+- `main_sam_pipeline.py`: Segments raw EM images using SAM and computes morphology statistics  
+- `main_classify_pipeline.py`: Classifies segmented images into wildtype or mutant  
+- `code/`: Contains modular functions for data processing, model training, and image transformation  
   - `input_files.py`: Builds dataframe of image paths and labels  
   - `sam_configure.py`: Loads pretrained SAM model and sets hyperparameters  
-  - `segment_workflow.py`: Contains functions for segmentation, cropping, feature extraction, and saving  
+  - `segment_workflow.py`: Segmentation, cropping, feature extraction, and saving  
+  - `setup_classifier.py`: Loads images, applies transformations, splits into datasets  
+  - `train_classifier.py`: Defines model and training logic  
+  - `morphology.py`: Morphology analysis and segmentation comparison  
+  - `customs_stats.py`: Classifier loading, prediction, and evaluation helpers  
 - `raw_images/`: Input folders for wildtype and mutant virus images  
-- `segmented_images/sam_segment_ver3/`: Output location for final segmented masks  
-- `results/`: Stores summary CSVs of segmentation outputs  
-
-# Getting Started
+- `segmented_images/`: Output locations for final segmented masks  
+- `results/`: Stores CSVs of segmentation outputs and comparison results  
+- `data/`: CSVs for train/test/val splits and ResNet model weights  
 
 ## Installation
 
@@ -25,70 +29,170 @@ cd capstone-viruses
 pip install -r requirements.txt
 ```
 
-## Other items needed
+## Other Requirements
 
-- Follow installation instructions for Segment Anything model from https://github.com/facebookresearch/segment-anything/
-- Download the checkpoint `.pth` file for the `sam_vit_h_4b8939` model to stay consistent with the model used in this project
-- Place the model in the appropriate directory for your project
+- Install Segment Anything from https://github.com/facebookresearch/segment-anything/
+- Download `sam_vit_h_4b8939.pth` checkpoint and place it in the appropriate directory
 
-## System Requirements (Project tested on):
+## System Requirements
 
 - Ubuntu 22.04  
 - Python 3.12  
 - CUDA 12.4  
-- Pytorch 2.1  
-- NVIDIA GPU (RTX 3090)
+- PyTorch 2.1  
+- NVIDIA GPU (e.g. RTX 3090)
+
+---
 
 # Usage Instructions
 
-## Setup
+## Raw Images ➔ Segmented Masks
 
-### 1. Set up the file inputs
-
-If the user has a directory of raw images that they wish to convert to segmented masks, they should proceed through the main_sam_pipeline.py script process. If they already have their generated masks and wish to get statistics on them or classify them, they should take note of where they are stored and skip these steps. 
-
-First, the user should have a directory of raw images. This project used EM images of viruses, split into two groups. All images were 750x750, with the virus body centered in the middle.
-
-In `input_files.py`, the user can enter their file paths or set up prompts to enter them interactively.  
-This code will output a dataframe of filepaths and classes that will be used later. It also creates a CSV version of this information that can be reused — filename can be customized as needed.
-
-When running `main_sam_pipeline.py`, the user will be prompted whether to use default filepaths, which can be hardcoded in `input_files.py` to avoid typing them on the command line.
-
-### 2. Configure SAM
-
-Make sure the SAM model (`sam_vit_h_4b8939.pth`) has been downloaded.
-
-In `main.py`, `download_sam()` is called once to load the model and returns a SAM instance.  
-Then `custom_mask(sam)` returns a configured mask generator object. You can pass `use_defaults=False` to override mask parameters.
-
-### 3. Segmentation
-
-The segmentation step consists of several function calls:
-
-- `load_image(df)`: Loads all images as RGB from the filepath DataFrame.
-- `generate_masks(image, mask_generator)`: Uses SAM to segment each image. The largest mask is assumed to be the viral body; masks within a 75-pixel extended bounding box are labeled as spikes. A grayscale mask is returned.
-- `postprocess_mask(segmentation_map, body_bbox)`: Crops the mask to focus on the body and nearby spikes. Computes spike count, total spike area, average spike area, and body/spike perimeters using OpenCV.
-- `save_masks(im_path, new_seg_map, save_dir)`: Saves each cropped mask to `segmented_images/sam_segment_ver3/` with `_seg_ver3` added to the filename.
-
-Each function is called iteratively on the image set. Metrics are collected in lists and merged into DataFrames.
-
-In the postprocessing step, spike features are stored per component, including area and perimeter. These are written to `results/all_component_areas.csv`. A separate summary with spike count per image is written to `results/sam_summary_results_2.csv`.
-
-### 4. Run a quick test
-
-To test the pipeline on a few images only, modify `df` in `main.py`:
+### 1. Build the input DataFrame
 
 ```python
-df = df.iloc[:2]  # run on first 2 images
+from code.input_files import make_input_df
+df = make_input_df('/path/to/raw_images/')
 ```
+
+### 2. Configure and run SAM
+
+```python
+from code.sam_configure import download_sam, custom_mask
+sam = download_sam()
+mask_generator = custom_mask(sam)
+```
+
+### 3. Segment and postprocess images
+
+```python
+from code.segment_workflow import run_segmentation_pipeline
+run_segmentation_pipeline(df, mask_generator, save_dir='segmented_images/sam_segment_ver3/')
+```
+
+### 4. Outputs
+
+- Segmented grayscale masks → `segmented_images/sam_segment_ver3/`
+- Per-component stats → `results/all_component_areas.csv`
+- Per-image spike counts → `results/sam_summary_results_2.csv`
+
+---
+
+## Segmented Masks ➔ Morphology Comparison
+
+### 1. Extract morphology from two segment sets
+
+```python
+from code.morphology import make_morphology_df
+
+df_sam = make_morphology_df('segmented_images/segment_ver2')
+df_manual = make_morphology_df('segmented_images/sam_segment_ver1')
+```
+
+### 2. Compare per-image spike areas
+
+```python
+from code.morphology import compare_methods
+
+df_compare = compare_methods(
+    method_a_dir='segmented_images/segment_ver2',
+    method_b_dir='segmented_images/sam_segment_ver1',
+    suffix_a=r'_seg_ver2$',
+    suffix_b=r'_seg$'
+)
+
+df_compare.to_csv('results/df_compare.csv')
+```
+
+---
+
+## Segmented Masks ➔ Classification
+
+### 1. Prepare train/test/val splits
+
+```python
+from code.setup_classifier import load_segmented_ims, create_and_save_new_df
+
+df = load_segmented_ims('segmented_images/segment_ver2')
+create_and_save_new_df(df, save_dir='data/', timestamp='20250421', stratify=True)
+```
+
+### 2. Transform images and load into DataLoader
+
+```python
+from code.setup_classifier import transform_data, create_tensor_dataset, create_dataloader
+import pandas as pd
+
+train_df = pd.read_csv('data/train_20250421_151833.csv')
+val_df = pd.read_csv('data/val_20250421_151833.csv')
+test_df = pd.read_csv('data/test_20250421_151833.csv')
+
+train_tfm, val_tfm = transform_data(image_size=(256, 256))
+
+train_dataset = create_tensor_dataset(train_df, train_tfm)
+val_dataset = create_tensor_dataset(val_df, val_tfm)
+test_dataset = create_tensor_dataset(test_df, val_tfm)
+
+train_loader = create_dataloader(train_dataset, batch_size=64)
+val_loader = create_dataloader(val_dataset, batch_size=64)
+test_loader = create_dataloader(test_dataset, batch_size=32)
+```
+
+### 3. Train the classifier
+
+```python
+from code.train_classifier import load_classifier, train_model
+import torch
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model = load_classifier(device=device, num_classes=2)
+train_model(model, device, train_loader, val_loader, save_dir='data/')
+```
+
+---
+
+## Evaluate Trained Classifier on Test Set
+
+### 1. Load pretrained model and test set
+
+```python
+from code.customs_stats import load_resnet_weights, make_test_data
+
+from torchvision import models
+pre_trained_model = models.resnet18(pretrained=False)
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+model = load_resnet_weights(pre_trained_model, save_dir='data', device=device, num_classes=2)
+
+X_test_df, test_dataset, test_loader = make_test_data(
+    dataframe=None,
+    csv_path=None,
+    csv_dir='data',
+    pattern='test_*.csv'
+)
+```
+
+### 2. Run prediction and display stats
+
+```python
+from code.customs_stats import make_predictions, display_stats
+
+X_test_df_preds = make_predictions(model, device, X_test_df, test_loader)
+display_stats(X_test_df_preds)
+```
+
+---
 
 ## Output Files
 
-- Segmented images: `segmented_images/sam_segment_ver3/`
-- CSV summaries:
-  - `results/all_component_areas.csv`: Area and perimeter stats for body and spike components per image
-  - `results/sam_summary_results_2.csv`: File-level summary of predicted spike count and saved mask path
+- Segmented images → `segmented_images/sam_segment_ver3/`
+- Per-component morphology → `results/all_component_areas.csv`
+- Spike summary per image → `results/sam_summary_results_2.csv`
+- Comparison of methods → `results/df_compare.csv`
+- Model weights → `data/resnet_weights_*.pth`
+- Dataset splits → `data/train_*.csv`, `val_*.csv`, `test_*.csv`
 
-## Citations
+---
+## Citation
 
-Alexander Kirillov, Eric Mintun, Nikhila Ravi, Hanzi Mao, Chloe Rolland, Laura Gustafson, Tete Xiao, Spencer Whitehead, Alexander C. Berg, Wan-Yen Lo, Piotr Dollár, and Ross Girshick. Segment Anything. arXiv preprint arXiv:2304.02643, 2023.
+Alexander Kirillov, Eric Mintun, Nikhila Ravi, Hanzi Mao, Chloe Rolland, Laura Gustafson, Tete Xiao, Spencer Whitehead, Alexander C. Berg, Wan-Yen Lo, Piotr Dollár, and Ross Girshick. Segment Anything. *arXiv preprint arXiv:2304.02643*, 2023.
