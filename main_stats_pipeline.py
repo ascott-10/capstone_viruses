@@ -51,5 +51,8 @@ model = load_resnet_weights(pre_trained_model, save_dir, device, num_classes=2)
 
 X_test_df, test_dataset, test_loader =  make_test_data(dataframe=None, csv_path=None, csv_dir=save_dir, pattern='test_*.csv')
 
+
+################ Make Predictions #########
+
 X_test_df_preds = make_predictions(model, device, X_test_df, test_loader)
 display_stats(X_test_df_preds)

@@ -49,6 +49,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 #This pipeline uses ResNet18, if the user really wants a different one, they should modify the function
 
 input_path = '/home/ascott10/documents/projects/capstone_viruses/segmented_images/segment_ver2'
+
 input_images_df = load_segmented_ims(input_path)
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
