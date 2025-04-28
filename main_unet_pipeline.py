@@ -5,9 +5,9 @@ import torch
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from code.config import INPUT_DIR, SAVE_DIR, NUM_EPOCHS, BATCH_SIZE, LEARNING_RATE, DEVICE
+from code.config import *
 
-from code.unet_training_setup import (
+from code.unet_training_setup import (load_segmented_ims,
     load_images_from_dataframe, 
     train_split, 
     create_segmentation_tensor_dataset, 
@@ -27,6 +27,8 @@ from code.unet_model import build_unet_functional, unet_forward
 ################ Setup ################
 
 # Load latest raw_and_segment CSV
+
+
 file_list = glob.glob(os.path.join(INPUT_DIR, "raw_and_segment_*.csv"))
 if not file_list:
     raise FileNotFoundError("No raw_and_segment_*.csv files found.")
