@@ -46,11 +46,15 @@ def train(model, device, train_loader, val_loader, criterion, optimizer, schedul
         total = 0
 
         # Training Phase
-        for images, labels in train_loader:
-            images, labels = images.to(device), labels.to(device)
+        # Training Phase
+        for _, masks, labels in train_loader:
+            if masks.shape[1] == 1:
+                masks = masks.repeat(1, 3, 1, 1)
+            masks = masks.to(device)
+            labels = labels.to(device)
 
             optimizer.zero_grad()
-            outputs = model(images)
+            outputs = model(masks)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -59,6 +63,7 @@ def train(model, device, train_loader, val_loader, criterion, optimizer, schedul
             _, predicted = torch.max(outputs, 1)
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
+
         
         train_accuracy = 100 * correct / total
         avg_train_loss = running_loss / len(train_loader)
@@ -72,9 +77,13 @@ def train(model, device, train_loader, val_loader, criterion, optimizer, schedul
         val_loss_total = 0.0 
 
         with torch.no_grad():
-            for val_images, val_labels in val_loader:
-                val_images, val_labels = val_images.to(device), val_labels.to(device)
-                val_outputs = model(val_images)
+            for _, val_masks, val_labels in val_loader:
+                if val_masks.shape[1] == 1:
+                    val_masks = val_masks.repeat(1, 3, 1, 1)
+                val_masks = val_masks.to(device)
+                val_labels = val_labels.to(device)
+
+                val_outputs = model(val_masks)
                 _, val_predicted = torch.max(val_outputs, 1)
                 val_total += val_labels.size(0)
                 val_correct += (val_predicted == val_labels).sum().item()
@@ -84,7 +93,8 @@ def train(model, device, train_loader, val_loader, criterion, optimizer, schedul
 
         avg_val_loss = val_loss_total / len(val_loader)
         val_accuracy = 100 * val_correct / val_total
-        val_losses.append(avg_val_loss)  
+        val_losses.append(avg_val_loss)
+
 
         model.train()
 
@@ -166,7 +176,7 @@ def train_model(model, device, train_loader, val_loader, save_dir):
     criterion = torch.nn.CrossEntropyLoss()
 
     # 4. Train final layer only
-    train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=30)
+    train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=15)
 
     # 5. Unfreeze all layers
     for param in model.parameters():
@@ -182,7 +192,7 @@ def train_model(model, device, train_loader, val_loader, save_dir):
     scheduler = CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-6)
 
     # 7. Train full model
-    train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=30)
+    train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=15)
 
     # 8. Save final weights
 

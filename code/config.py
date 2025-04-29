@@ -1,5 +1,6 @@
 import torch
 import os
+import pandas as pd
 
 #export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
@@ -13,10 +14,11 @@ ENVIRONMENT = "home"  # options: "home" or "school"
 if ENVIRONMENT == "school":
     RAW_IMS_WT = '/home/ariellescott/Documents/capstone/raw_ims/raw_wt/'
     RAW_IMS_MUT = '/home/ariellescott/Documents/capstone/raw_ims/raw_mutant/'
-    SEGMENTED_MASKS_WT = '/home/ascott10/documents/projects/capstone_viruses/segmented_images/wildtype_manual_correction/'
-    SEGMENTED_MASKS_MUT = '/home/ascott10/documents/projects/capstone_viruses/segmented_images/mutant_manual_correction/'
-    SAVE_DIR = '/home/ariellescott/Documents/capstone/capstone_viruses-2/results/'
-    INPUT_DIR = '/home/ariellescott/Documents/capstone/capstone_viruses-2/results/'
+    SEGMENTED_MASKS_WT = '/home/ariellescott/Documents/capstone/segmented_ims/'
+    SEGMENTED_MASKS_MUT = '/home/ariellescott/Documents/capstone/segmented_ims/'
+    SAVE_DIR = '/home/ariellescott/Documents/capstone/capstone_viruses/results/'
+    INPUT_DIR = '/home/ariellescott/Documents/capstone/capstone_viruses/results/'
+    convert_df = pd.read_excel('/home/ariellescott/Documents/capstone/capstone_viruses/results/Segmentation_Progress.xlsx', usecols = [0,1]) 
 
 elif ENVIRONMENT == "home":
     RAW_IMS_WT = '/home/ascott10/documents/projects/capstone_viruses/raw_images/wt/'
@@ -25,13 +27,15 @@ elif ENVIRONMENT == "home":
     SEGMENTED_MASKS_MUT = '/home/ascott10/documents/projects/capstone_viruses/segmented_images/mutant_manual_correction/'
     SAVE_DIR = '/home/ascott10/documents/projects/capstone_viruses/data/'
     INPUT_DIR = '/home/ascott10/documents/projects/capstone_viruses/data/'
+    convert_df = pd.read_excel('/home/ascott10/documents/projects/capstone_viruses/data/Segmentation_Progress.xlsx', usecols = [0,1]) 
+
 
 else:
-    raise ValueError("❌ Invalid ENVIRONMENT. Must be 'home' or 'school'.")
+    raise ValueError('"Must be "home" or "school"')
 
 # ======== TRAINING SETTINGS ========
 
-NUM_EPOCHS = 25
+NUM_EPOCHS = 10
 BATCH_SIZE = 4
 LEARNING_RATE = 1e-4
 
@@ -41,5 +45,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # ======== OTHER SETTINGS ========
 
+SUBSAMPLE = 50
 IMAGE_SIZE = (256,256)
 SEED = 42
+NEW_CLASSIFY = True

@@ -13,8 +13,7 @@ from datetime import datetime
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.model_selection import train_test_split
 
-from code.config import RAW_IMS_WT, RAW_IMS_MUT, SEGMENTED_MASKS_WT, SEGMENTED_MASKS_MUT, SAVE_DIR, INPUT_DIR, IMAGE_SIZE
-
+from code.config import *
 
 ################ Functions ################
 
@@ -66,16 +65,12 @@ def load_segmented_ims(input_path):
 def combine_dfs(convert_df, RAW_IMS_MUT, RAW_IMS_WT, SEGMENTED_MASKS_MUT, SEGMENTED_MASKS_WT, SAVE_DIR):
     """Combine raw images and segmented masks into one dataframe."""
 
-    # Load raw images (no conversion needed)
+    #Get all file paths for raw images and manually segmented masks
     image_labels_muts, image_filepaths_muts, image_ids_muts = load_segmented_ims(RAW_IMS_MUT)
     image_labels_wts, image_filepaths_wts, image_ids_wts = load_segmented_ims(RAW_IMS_WT)
+    segmented_image_labels_muts, segmented_image_filepaths_muts, segmented_image_ids_muts = load_segmented_ims(SEGMENTED_MASKS_MUT)
+    segmented_image_labels_wts, segmented_image_filepaths_wts, segmented_image_ids_wts = load_segmented_ims(SEGMENTED_MASKS_WT)
 
-    # Load segmented masks (conversion needed)
-    segmented_image_labels_muts, segmented_image_filepaths_muts, segmented_image_ids_muts = load_segmented_ims(SEGMENTED_MASKS_MUT, convert_df)
-
-    
-
-    segmented_image_labels_wts, segmented_image_filepaths_wts, segmented_image_ids_wts = load_segmented_ims(SEGMENTED_MASKS_WT, convert_df)
 
     # Build DataFrames
     all_raw_files = pd.DataFrame([
@@ -84,32 +79,47 @@ def combine_dfs(convert_df, RAW_IMS_MUT, RAW_IMS_WT, SEGMENTED_MASKS_MUT, SEGMEN
         (image_labels_muts + image_labels_wts)
     ], index=['im_id', 'file_path', 'class']).T
 
-    
-
     all_segmented_files = pd.DataFrame([
         (segmented_image_ids_muts + segmented_image_ids_wts),
         (segmented_image_filepaths_muts + segmented_image_filepaths_wts),
         (segmented_image_labels_muts + segmented_image_labels_wts)
     ], index=['im_id', 'segmented_file_path', 'class']).T
 
-    print(all_segmented_files)
+    convert_df['Modified Name'] = convert_df['Modified Name'].astype(str).str.replace(r'_corrected.*', '', regex=True)
+    all_segmented_files['im_id'] = all_segmented_files['im_id'].astype(str).str.replace(r'_corrected.*', '', regex=True)
 
-    # Clean im_id to remove _seg type suffix
-    all_segmented_files['im_id'] = all_segmented_files['im_id'].astype(str).str.replace(r'_seg.*', '', regex=True)
 
-    # Merge raw and segmented tables
-    all_files_df = all_raw_files.merge(all_segmented_files, on=['im_id', 'class'])
+    segmented_combined = all_segmented_files.merge(convert_df, left_on='im_id', right_on = 'Modified Name')
+    merged_df = all_raw_files.merge(segmented_combined, left_on='im_id', right_on='File_name')
 
-    print('[INFO] All files loaded.')
+    final_df = pd.DataFrame({
+        'im_id': merged_df['im_id_x'],
+        'file_path': merged_df['file_path'],
+        'segmented_file_path': merged_df['segmented_file_path'],
+        'class': merged_df['class_x']
+    })
 
-    # Save the merged DataFrame
-    os.makedirs(SAVE_DIR, exist_ok=True)
-    now = datetime.now()
-    timestamp = now.strftime("%Y%m%d_%H%M")
-    save_path = os.path.join(SAVE_DIR, f"raw_and_segment_{timestamp}.csv")
-    all_files_df.to_csv(save_path, index=False)
+    return final_df
 
-    return all_files_df
+def subsample_test(final_df, SUBSAMPLE, class_1_label = 'mutant', class_2_label = 'wildtype'):
+
+    class_1_label = class_1_label
+    class_2_label = class_2_label
+    mutants_df = final_df[final_df['class'] == 'mutant']
+    wildtypes_df = final_df[final_df['class'] == 'wildtype']
+
+    n_mutants = min(SUBSAMPLE, len(mutants_df))
+    n_wildtypes = min(SUBSAMPLE, len(wildtypes_df))
+
+    mutants_sample = mutants_df.sample(n=n_mutants, random_state=42)
+    wildtypes_sample = wildtypes_df.sample(n=n_wildtypes, random_state=42)
+
+    df = pd.concat([mutants_sample, wildtypes_sample]).reset_index(drop=True)
+
+    print(f" Using {len(df)} images total ({n_mutants} mutants + {n_wildtypes} wildtypes)")
+
+    return df
+
 
 
 def load_images_from_dataframe(df, raw_image_col, mask_col, label_col=None):
@@ -177,9 +187,47 @@ def train_split(X_raw, X_segmented, y_class=None):
         return (X_raw_train, X_raw_val, X_raw_test,
                 X_seg_train, X_seg_val, X_seg_test)
 
-def create_segmentation_tensor_dataset(X_raw, X_mask):
-    """Combine raw images and masks into a TensorDataset."""
-    return TensorDataset(X_raw, X_mask)
+from sklearn.preprocessing import LabelEncoder
+import torch
+from torch.utils.data import TensorDataset
+
+from sklearn.preprocessing import LabelEncoder
+import torch
+from torch.utils.data import TensorDataset
+
+def create_segmentation_tensor_dataset(X_raw, X_mask, labels=None, return_label_mapping=False):
+    """Combine raw images, masks, and optionally labels into a TensorDataset.
+    
+    Args:
+        X_raw: Tensor of raw images
+        X_mask: Tensor of masks
+        labels: List/Tensor of class labels (optional)
+        return_label_mapping: bool, if True returns label mapping dict
+        
+    Returns:
+        TensorDataset of (image, mask[, label])
+        Optionally also returns label mapping if requested.
+    """
+    label_mapping = None
+
+    if labels is not None:
+        if not isinstance(labels, torch.Tensor):
+            if isinstance(labels[0], str):
+                encoder = LabelEncoder()
+                labels = encoder.fit_transform(labels)
+                label_mapping = dict(zip(encoder.classes_, encoder.transform(encoder.classes_)))
+            labels = torch.tensor(labels, dtype=torch.long)
+        dataset = TensorDataset(X_raw, X_mask, labels)
+    else:
+        dataset = TensorDataset(X_raw, X_mask)
+    
+    if return_label_mapping:
+        return dataset, label_mapping
+    else:
+        return dataset
+
+
+
 
 def create_dataloader(dataset, batch_size=32, shuffle=True):
     """Create a DataLoader from a TensorDataset."""

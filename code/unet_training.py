@@ -15,7 +15,7 @@ def setup_training(model, learning_rate=1e-4):
 def train_one_epoch(model, dataloader, loss_fn, optimizer, device):
     model.train()
     running_loss = 0.0
-    for images, masks in dataloader:
+    for images, masks, _ in dataloader:
         images = images.to(device)
         masks = masks.to(device)
 
@@ -40,7 +40,7 @@ def validate_one_epoch(model, dataloader, loss_fn, device):
     model.eval()
     running_loss = 0.0
     with torch.no_grad():
-        for images, masks in dataloader:
+        for images, masks, _ in dataloader:
             images = images.to(device)
             masks = masks.to(device)
 
@@ -87,4 +87,98 @@ def plot_loss(train_losses, val_losses, save_dir=None):
         save_path = os.path.join(save_dir, "loss_curve.png")
         plt.savefig(save_path)
         print(f"Loss curve saved at {save_path}")
-    plt.show()
+    plt.show(block=False)
+    plt.pause(2) 
+    plt.close()
+
+
+def plot_test_predictions(test_loader, model, save_dir, device, one_image=False, max_examples=5):
+    model.eval()
+    os.makedirs(os.path.join(save_dir, "test_predictions"), exist_ok=True)
+    
+    num_to_plot = min(max_examples, len(test_loader.dataset))
+    count = 0
+
+    all_images = []
+    all_masks = []
+    all_preds = []
+
+    with torch.no_grad():
+        for images, masks, _ in test_loader:
+            images = images.to(device)
+            masks = masks.to(device)
+
+            outputs = model(images)
+
+            if outputs.shape != masks.shape:
+                outputs = torch.nn.functional.interpolate(outputs, size=masks.shape[2:], mode='bilinear', align_corners=False)
+
+            preds = torch.sigmoid(outputs)
+            preds = (preds > 0.5).float()
+
+            images = images.cpu()
+            masks = masks.cpu()
+            preds = preds.cpu()
+
+            for i in range(images.shape[0]):
+                if one_image:
+                    all_images.append(images[i, 0])
+                    all_masks.append(masks[i, 0])
+                    all_preds.append(preds[i, 0])
+                else:
+                    fig, axs = plt.subplots(1, 3, figsize=(12,4))
+
+                    axs[0].imshow(images[i,0], cmap='gray')
+                    axs[0].set_title("Raw Image")
+                    axs[0].axis('off')
+
+                    axs[1].imshow(masks[i,0], cmap='gray')
+                    axs[1].set_title("Ground Truth Segmented Mask")
+                    axs[1].axis('off')
+
+                    axs[2].imshow(preds[i,0], cmap='gray')
+                    axs[2].set_title("Predicted Mask")
+                    axs[2].axis('off')
+
+                    plt.tight_layout()
+                    save_path = os.path.join(save_dir, "test_predictions", f"test_{count}.png")
+                    plt.savefig(save_path)
+                    plt.show()
+                    plt.close()
+
+                    print(f"✅ Saved prediction plot to {save_path}")
+                    count += 1
+
+                if count >= num_to_plot:
+                    break
+            if count >= num_to_plot:
+                break
+
+    # After loop: if one_image option
+    if one_image:
+        total_examples = len(all_images)
+        fig, axs = plt.subplots(total_examples, 3, figsize=(12, 4 * total_examples))
+
+        if total_examples == 1:
+            axs = [axs]  # ensure axs is iterable
+
+        for idx in range(total_examples):
+            axs[idx][0].imshow(all_images[idx], cmap='gray')
+            axs[idx][0].set_title("Raw Image")
+            axs[idx][0].axis('off')
+
+            axs[idx][1].imshow(all_masks[idx], cmap='gray')
+            axs[idx][1].set_title("Ground Truth Segmented Mask")
+            axs[idx][1].axis('off')
+
+            axs[idx][2].imshow(all_preds[idx], cmap='gray')
+            axs[idx][2].set_title("Predicted Mask")
+            axs[idx][2].axis('off')
+
+        plt.tight_layout()
+        save_path = os.path.join(save_dir, "test_predictions", f"test_combined.png")
+        plt.savefig(save_path)
+        plt.show()
+        plt.close()
+
+        print(f"✅ Saved combined prediction plot to {save_path}")

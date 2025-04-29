@@ -98,29 +98,14 @@ def extract_morphology(segmented_image_path):
     
     return body_df, spike_df
 
-def morphology_df_with_spikes(segmented_image_path):
-    im_path = segmented_image_path
-    file_path_ls = []
-    label_ls = []
+def ground_truth_morph(df_final, segmented_path_label, class_label):
+    
     proc_labels = []
     proc_file_paths = []
 
-    for root, _, files in os.walk(im_path):
-        for file in files:
-            if file.lower().endswith('.png'):
-                file_path = os.path.join(root, file)
-                file_path_ls.append(file_path)
-                
-                if 'MHVWT' in file:
-                    file_label = 'wt'
-                elif 'A2_MHV' in file:
-                    file_label = 'mut'
-                else:
-                    file_label = 'unknown'
-                
-                label_ls.append(file_label)
+    df_input = df_final[[segmented_path_label, class_label]]
 
-    df_input = pd.DataFrame({'filepath': file_path_ls, 'class': label_ls})
+    
     print(df_input)
 
     sum_spike_area = []
@@ -162,7 +147,92 @@ def morphology_df_with_spikes(segmented_image_path):
         'file_path': proc_file_paths
     })
 
-    print(len(df))
-    print(df.head())
-
+    
     return df
+
+from scipy.stats import linregress, pearsonr
+import pandas as pd
+from config import *
+
+def calculate_spike_stats(ground_truth_morph_df, plot_yes = None):
+    results = []
+
+    # Loop over each class and each spike count type
+    for cls in ['mutant', 'wildtype']:
+        df_subset = ground_truth_morph_df[ground_truth_morph_df['Class'] == cls]
+
+        # Predicted vs Area
+        y_area = df_subset['Total_Spike_Area_Per_Particle']
+        
+        # Predicted vs Area
+        x_pred = df_subset['Spike_Count']
+        linreg_pred = linregress(x_pred, y_area)
+        r_pred, p_pred = pearsonr(x_pred, y_area)
+
+        results.append({
+            'Class': cls,
+            'Type': 'Predicted',
+            'Slope': linreg_pred.slope,
+            'Intercept': linreg_pred.intercept,
+            'R-squared': linreg_pred.rvalue**2,
+            'Pearson r': r_pred,
+            'p-value': p_pred
+        })
+
+    # Convert to DataFrame
+    regression_by_class = pd.DataFrame(results)
+
+    print(regression_by_class[['Class', 'Type','Slope','R-squared', 'Pearson r','p-value' ]])
+
+    if plot_yes is not None:
+        plot_spike_area(ground_truth_morph_df, SAVE_DIR)
+
+    return regression_by_class
+
+def plot_spike_area(ground_truth_morph, SAVE_DIR):
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from matplotlib import cm
+
+    # Use Paired colormap for classes
+    paired = cm.get_cmap('Paired', 6)
+    class_colors = {
+        'mutant': paired(0),
+        'wildtype': paired(1)
+    }
+
+    manual_reg_color = 'black'
+
+    fig, ax = plt.subplots(figsize=(7, 6))
+
+    sns.scatterplot(
+        data=ground_truth_morph,
+        y='Spike_Count',
+        x='Total_Spike_Area_Per_Particle',
+        hue='Class',
+        style='Class',
+        palette=class_colors,
+        s=60,
+        alpha=0.9,
+        ax=ax
+    )
+    sns.regplot(
+        data=ground_truth_morph,
+        y='Spike_Count',
+        x='Total_Spike_Area_Per_Particle',
+        scatter=False,
+        color=manual_reg_color,
+        label='Manual Regression',
+        ax=ax
+    )
+
+    ax.set_title('Predicted Spike Count vs. Calculated Spike Area')
+    ax.set_xlabel('Total Spike Area')
+    ax.set_ylabel('Predicted Spike Count')
+    ax.grid(True)
+
+    plt.tight_layout()
+    plt.show()
+    save_path = os.path.join(SAVE_DIR, "spike_area_plot.png")
+    plt.savefig(save_path)
+

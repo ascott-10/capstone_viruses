@@ -1,9 +1,39 @@
+
 ################ Import Libraries ################
-import os
-import glob
-import torch
+import numpy as np
 import pandas as pd
+
+import os
+import sys
+sys.path.append("..")
+sys.path.append('./code')
+import pathlib
+from pathlib import Path
+
+import cv2
+import PIL
+from PIL import Image
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+
+
+import os
+import pandas as pd
+import pathlib
+from pathlib import Path
+
+import torch
+from torchvision import models
+from torch.utils.data import TensorDataset, DataLoader
+from torch.optim.lr_scheduler import StepLR
+from sklearn.model_selection import train_test_split
+
+import paramiko #For remote GPU support
+from datetime import datetime
+
+print('Imported libraries') 
+
+######## Custom ########
 
 from code.config import *
 from code.unet_training_setup import (load_segmented_ims, subsample_test,
@@ -22,7 +52,16 @@ from code.unet_training import (
 )
 from code.unet_model import UNet
 
-################ Setup ################
+from code.setup_classifier import load_segmented_ims, transform_data, create_tensor_dataset, create_dataloader, create_and_save_new_df
+from code.train_classifier import load_classifier, train_model
+
+from code.customs_stats import load_resnet_weights, make_test_data, make_predictions, display_stats
+
+from code.spike_morpohology import ground_truth_morph, plot_spike_area, calculate_spike_stats
+
+################ Full Data Setup ################
+
+"""This will be used for both the UNet (segmentation) and ResNet (classification)"""
 
 #Get all file paths and labels into one dataframe
 all_df = combine_dfs(convert_df, RAW_IMS_MUT, RAW_IMS_WT, SEGMENTED_MASKS_MUT, SEGMENTED_MASKS_WT, SAVE_DIR)
@@ -38,7 +77,13 @@ print(final_df)
 #Load raw images, segmented images, masks, labels 
 X_raw, X_seg, labels = load_images_from_dataframe(final_df, 'file_path', 'segmented_file_path', 'class')
 X_raw_train, X_raw_val, X_raw_test,X_seg_train, X_seg_val, X_seg_test, y_train, y_val, y_test = train_split(X_raw, X_seg, labels)
-
+_, X_test_df = train_test_split(
+    final_df,
+    test_size=0.2,
+    random_state=42,
+    stratify=final_df['class']
+)
+X_test_df = X_test_df.reset_index(drop=True)
 # Build datasets
 train_dataset = create_segmentation_tensor_dataset(X_raw_train, X_seg_train, y_train)
 val_dataset   = create_segmentation_tensor_dataset(X_raw_val, X_seg_val, y_val)
@@ -49,8 +94,9 @@ train_loader = create_dataloader(train_dataset, batch_size=BATCH_SIZE, shuffle=T
 val_loader   = create_dataloader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 test_loader  = create_dataloader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
+################ UNet ################
 
-################ Build or Load Model ################
+"""Use UNet to make predictions of segmentation"""
 
 model = UNet(input_channels=1, output_channels=1)
 model = model.to(DEVICE)
@@ -66,10 +112,7 @@ else:
     print("No saved model found, starting training")
     skip_training = False
 
-# Setup loss and optimizer
 loss_fn, optimizer = setup_training(model, learning_rate=LEARNING_RATE)
-
-################ Train ################
 
 if not skip_training:
     train_losses = []
@@ -94,6 +137,33 @@ else:
     print(" Skipping training, model weights already exist.")
 
 print("Testing")
-
 plot_test_predictions(test_loader, model, SAVE_DIR, DEVICE, one_image=True, max_examples=5)
 
+################ ResNet ################
+"""Use ResNet to make predictions of classification"""
+from code.setup_classifier import load_segmented_ims, transform_data, create_tensor_dataset, create_dataloader, create_and_save_new_df
+from code.train_classifier import load_classifier, train_model
+#Training pipeline
+if NEW_CLASSIFY == True:
+
+    model = load_classifier(DEVICE, num_classes=2)
+    model.to(DEVICE)
+    train_model(model, DEVICE, train_loader,val_loader, SAVE_DIR)
+
+    print('model trained')
+else:
+    pre_trained_model = models.resnet18(pretrained=False)
+    model = load_resnet_weights(pre_trained_model, SAVE_DIR, DEVICE, num_classes=2)
+
+    print('model trained')
+
+X_test_df_preds = make_predictions(model, DEVICE, X_test_df, test_loader)
+display_stats(X_test_df_preds)
+
+############# Get Morphology statistics ###############
+
+#### Morphology ###
+df_ground_truth_morph = ground_truth_morph(final_df, segmented_path_label = 'segmented_file_path', class_label = 'class')
+print(df_ground_truth_morph)
+
+regression_by_class = calculate_spike_stats(df_ground_truth_morph, plot_yes =True)
