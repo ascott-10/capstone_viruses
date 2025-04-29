@@ -13,16 +13,18 @@ def setup_training(model, learning_rate=1e-4):
     return loss_fn, optimizer
 
 def train_one_epoch(model, dataloader, loss_fn, optimizer, device):
-    """
-    Trains the model for one epoch.
-    """
     model.train()
     running_loss = 0.0
     for images, masks in dataloader:
         images = images.to(device)
         masks = masks.to(device)
 
-        outputs = model(images)  # ✅ clean standard PyTorch
+        outputs = model(images)
+
+        # Resize outputs to match masks if needed
+        if outputs.shape != masks.shape:
+            outputs = torch.nn.functional.interpolate(outputs, size=masks.shape[2:], mode='bilinear', align_corners=False)
+
         loss = loss_fn(outputs, masks)
 
         optimizer.zero_grad()
@@ -33,10 +35,8 @@ def train_one_epoch(model, dataloader, loss_fn, optimizer, device):
 
     return running_loss / len(dataloader)
 
+
 def validate_one_epoch(model, dataloader, loss_fn, device):
-    """
-    Validates the model for one epoch.
-    """
     model.eval()
     running_loss = 0.0
     with torch.no_grad():
@@ -44,12 +44,17 @@ def validate_one_epoch(model, dataloader, loss_fn, device):
             images = images.to(device)
             masks = masks.to(device)
 
-            outputs = model(images)  # ✅ no manual unet_forward
-            loss = loss_fn(outputs, masks)
+            outputs = model(images)
 
+            # Resize outputs to match masks if needed
+            if outputs.shape != masks.shape:
+                outputs = torch.nn.functional.interpolate(outputs, size=masks.shape[2:], mode='bilinear', align_corners=False)
+
+            loss = loss_fn(outputs, masks)
             running_loss += loss.item()
 
     return running_loss / len(dataloader)
+
 
 def save_best_model(model, save_dir, epoch, val_loss, best_val_loss):
     """
@@ -59,7 +64,7 @@ def save_best_model(model, save_dir, epoch, val_loss, best_val_loss):
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, f"best_unet_epoch{epoch+1}_val{val_loss:.4f}.pt")
         torch.save(model.state_dict(), save_path)
-        print(f"✅ Best model saved at Epoch {epoch+1} with val_loss {val_loss:.4f}")
+        print(f"Best model saved at Epoch {epoch+1} with val_loss {val_loss:.4f}")
         return val_loss
     else:
         return best_val_loss
@@ -81,5 +86,5 @@ def plot_loss(train_losses, val_losses, save_dir=None):
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, "loss_curve.png")
         plt.savefig(save_path)
-        print(f"✅ Loss curve saved at {save_path}")
+        print(f"Loss curve saved at {save_path}")
     plt.show()

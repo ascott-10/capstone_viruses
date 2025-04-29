@@ -87,6 +87,5 @@ class UNet(nn.Module):
         d1 = self.dec1(u1)
 
         outputs = self.final(d1)
-        outputs = torch.sigmoid(outputs)
-
         return outputs
+

@@ -1,4 +1,3 @@
-################ Import Libraries ################
 import numpy as np
 import pandas as pd
 import os
@@ -14,57 +13,96 @@ from datetime import datetime
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.model_selection import train_test_split
 
-from code.config import RAW_IMS_WT, RAW_IMS_MUT, SEGMENTED_MASKS, SAVE_DIR, INPUT_DIR
+from code.config import RAW_IMS_WT, RAW_IMS_MUT, SEGMENTED_MASKS_WT, SEGMENTED_MASKS_MUT, SAVE_DIR, INPUT_DIR, IMAGE_SIZE
 
-IMAGE_SIZE = (750, 750)  # Resize images to match U-Net input size
 
 ################ Functions ################
 
+import os
+import pandas as pd
+from pathlib import Path
+
+import os
+import pandas as pd
+from pathlib import Path
+
 def load_segmented_ims(input_path):
     """Load segmented image paths and labels based on filename patterns."""
+
     image_filepaths = []
     image_labels = []
     image_ids = []
 
+    mut_labels = ['A2_MHV', 'muimage']
+    wt_labels = ['MHVWT', 'wtimage']
+
+    
+            
     for files in os.listdir(input_path):
         if files.endswith('png'):
-            if 'A2_MHV' in files:
+            file_path = os.path.join(input_path, files)
+            image_id = Path(files).stem
+            
+
+            # Check if filename matches normally
+            if any(tag in image_id for tag in mut_labels):
                 label = 'mutant'
-            elif 'MHVWT' in files:
+            elif any(tag in image_id for tag in wt_labels):
                 label = 'wildtype'
             else:
-                label = 'unknown'  # fallback
+                label = 'unknown'
+            
+
             image_labels.append(label)
-            image_filepaths.append(os.path.join(input_path, files))
-            image_ids.append(Path(files).stem)
+            image_filepaths.append(file_path)
+            image_ids.append(image_id)
+
+            
 
     return image_labels, image_filepaths, image_ids
 
-def combine_dfs(RAW_IMS_MUT, RAW_IMS_WT, SEGMENTED_MASKS, SAVE_DIR):
+
+
+def combine_dfs(convert_df, RAW_IMS_MUT, RAW_IMS_WT, SEGMENTED_MASKS_MUT, SEGMENTED_MASKS_WT, SAVE_DIR):
     """Combine raw images and segmented masks into one dataframe."""
+
+    # Load raw images (no conversion needed)
     image_labels_muts, image_filepaths_muts, image_ids_muts = load_segmented_ims(RAW_IMS_MUT)
     image_labels_wts, image_filepaths_wts, image_ids_wts = load_segmented_ims(RAW_IMS_WT)
-    segmented_image_labels, segmented_image_filepaths, segmented_image_ids = load_segmented_ims(SEGMENTED_MASKS)
 
+    # Load segmented masks (conversion needed)
+    segmented_image_labels_muts, segmented_image_filepaths_muts, segmented_image_ids_muts = load_segmented_ims(SEGMENTED_MASKS_MUT, convert_df)
+
+    
+
+    segmented_image_labels_wts, segmented_image_filepaths_wts, segmented_image_ids_wts = load_segmented_ims(SEGMENTED_MASKS_WT, convert_df)
+
+    # Build DataFrames
     all_raw_files = pd.DataFrame([
         (image_ids_muts + image_ids_wts),
         (image_filepaths_muts + image_filepaths_wts),
         (image_labels_muts + image_labels_wts)
     ], index=['im_id', 'file_path', 'class']).T
 
+    
+
     all_segmented_files = pd.DataFrame([
-        segmented_image_ids,
-        segmented_image_filepaths,
-        segmented_image_labels
+        (segmented_image_ids_muts + segmented_image_ids_wts),
+        (segmented_image_filepaths_muts + segmented_image_filepaths_wts),
+        (segmented_image_labels_muts + segmented_image_labels_wts)
     ], index=['im_id', 'segmented_file_path', 'class']).T
 
-    # Smarter: remove _seg or _seg_ver2 or anything like _seg_v3
-    all_segmented_files['im_id'] = all_segmented_files['im_id'].str.replace(r'_seg.*', '', regex=True)
+    print(all_segmented_files)
 
+    # Clean im_id to remove _seg type suffix
+    all_segmented_files['im_id'] = all_segmented_files['im_id'].astype(str).str.replace(r'_seg.*', '', regex=True)
+
+    # Merge raw and segmented tables
     all_files_df = all_raw_files.merge(all_segmented_files, on=['im_id', 'class'])
 
     print('[INFO] All files loaded.')
 
+    # Save the merged DataFrame
     os.makedirs(SAVE_DIR, exist_ok=True)
     now = datetime.now()
     timestamp = now.strftime("%Y%m%d_%H%M")
@@ -72,6 +110,7 @@ def combine_dfs(RAW_IMS_MUT, RAW_IMS_WT, SEGMENTED_MASKS, SAVE_DIR):
     all_files_df.to_csv(save_path, index=False)
 
     return all_files_df
+
 
 def load_images_from_dataframe(df, raw_image_col, mask_col, label_col=None):
     """Load raw images and masks from a dataframe into tensors."""
