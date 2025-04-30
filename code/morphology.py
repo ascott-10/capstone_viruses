@@ -322,6 +322,9 @@ def compare_methods_stats(save_dir, plot_yes = None):
     df_long = df.melt(id_vars=['Image_ID', 'Class'],
                       value_vars=['Spike Area Manual', 'Spike Area Automatic'],
                       var_name='Method', value_name='Spike Area')
+    df_long = df_long.dropna()
+    df_long = df_long.groupby(['Image_ID', 'Class', 'Method'])['Spike Area'].mean().reset_index()
+    
     df_wide = df_long.pivot(index=['Image_ID', 'Class'], columns='Method', values='Spike Area').reset_index()
     df_wide.columns.name = None
     df_wide = df_wide.rename(columns={'Spike Area Manual': 'Manual', 'Spike Area Automatic': 'Auto'})
@@ -376,6 +379,90 @@ def compare_methods_stats(save_dir, plot_yes = None):
         plt.show()
 
         return stat, p, summary
+    
+def compare_classes_stats(df_ground_truth_morph, plot_yes=None, save_dir=None, save_name="class_comparison_stats.csv"):
+    import os
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from scipy.stats import mannwhitneyu
+
+    metrics = ['Total_Spike_Area_Per_Particle', 'Spike_Count']
+    results = {}
+
+    for metric in metrics:
+        data_mutant = df_ground_truth_morph[df_ground_truth_morph['Class'] == 'mutant'][metric].dropna()
+        data_wildtype = df_ground_truth_morph[df_ground_truth_morph['Class'] == 'wildtype'][metric].dropna()
+
+        stat, p = mannwhitneyu(data_mutant, data_wildtype, alternative='two-sided')
+
+        results[metric] = {
+            'Mutant_Mean': np.mean(data_mutant),
+            'Wildtype_Mean': np.mean(data_wildtype),
+            'Mann-Whitney_Statistic': stat,
+            'p-value': p
+        }
+
+        print(f"Comparison for {metric}:")
+        print(f"  Mann-Whitney U statistic = {stat:.8f}")
+        print(f"  p-value = {p:.8f}")
+        if p < 0.05:
+            print("  Statistically significant difference between mutant and wildtype.")
+        else:
+            print("  No significant difference between mutant and wildtype.")
+        print()
+
+    if plot_yes:
+        for metric in metrics:
+            plt.figure(figsize=(6, 5))
+            sns.boxplot(data=df_ground_truth_morph, x='Class', y=metric)
+            plt.title(f'Comparison of {metric} by Class')
+            plt.ylabel(metric)
+            plt.xlabel('Class')
+            plt.tight_layout()
+            plt.show()
+
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, save_name)
+        pd.DataFrame(results).T.to_csv(save_path)
+        print(f"Saved stats to: {save_path}")
+
+    return results
+
+
+def compare_classes_plotting(df_ground_truth_morph, save_dir=None, save_name="class_comparison_boxplot.png", show_plot=False):
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import os
+
+    metrics = ['Total_Spike_Area_Per_Particle', 'Spike_Count']
+
+    fig, ax = plt.subplots(1, 2, figsize=(14, 6))
+
+    sns.boxplot(data=df_ground_truth_morph, x='Class', y='Total_Spike_Area_Per_Particle', ax=ax[0])
+    ax[0].set_title('Total Spike Area by Class')
+    ax[0].set_ylabel("Total Spike Area")
+    ax[0].set_xlabel('Class')
+
+    sns.boxplot(data=df_ground_truth_morph, x='Class', y='Spike_Count', ax=ax[1])
+    ax[1].set_title('Spike Count by Class')
+    ax[1].set_ylabel("Spike Count")
+    ax[1].set_xlabel('Class')
+
+    plt.tight_layout()
+
+    if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, save_name)
+        plt.savefig(save_path)
+        print(f"Saved plot to: {save_path}")
+
+    if show_plot:
+        plt.show()
+    else:
+        plt.close(fig)  # prevent memory buildup in headless runs
+
+
 
 
 

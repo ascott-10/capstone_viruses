@@ -92,16 +92,30 @@ def plot_loss(train_losses, val_losses, save_dir=None):
     plt.close()
 
 
-def plot_test_predictions(test_loader, model, save_dir, device, one_image=False, max_examples=5):
+import os
+import matplotlib.pyplot as plt
+import torch
+import pandas as pd
+
+import os
+import matplotlib.pyplot as plt
+import torch
+import pandas as pd
+
+def plot_test_predictions(test_loader, model, save_dir, device, image_paths=None, mask_paths=None, one_image=False, max_examples=5):
     model.eval()
     os.makedirs(os.path.join(save_dir, "test_predictions"), exist_ok=True)
-    
+
     num_to_plot = min(max_examples, len(test_loader.dataset))
     count = 0
 
     all_images = []
     all_masks = []
     all_preds = []
+    log_entries = []
+
+    raw_paths = image_paths if image_paths is not None else [None] * len(test_loader.dataset)
+    seg_paths = mask_paths if mask_paths is not None else [None] * len(test_loader.dataset)
 
     with torch.no_grad():
         for images, masks, _ in test_loader:
@@ -121,10 +135,20 @@ def plot_test_predictions(test_loader, model, save_dir, device, one_image=False,
             preds = preds.cpu()
 
             for i in range(images.shape[0]):
+                raw_path = raw_paths[count]
+                seg_path = seg_paths[count]
+
                 if one_image:
                     all_images.append(images[i, 0])
                     all_masks.append(masks[i, 0])
                     all_preds.append(preds[i, 0])
+
+                    # Still log it for combined plot
+                    log_entries.append({
+                        "saved_prediction": f"test_combined.png",
+                        "raw_image_path": raw_path,
+                        "ground_truth_mask_path": seg_path
+                    })
                 else:
                     fig, axs = plt.subplots(1, 3, figsize=(12,4))
 
@@ -141,12 +165,19 @@ def plot_test_predictions(test_loader, model, save_dir, device, one_image=False,
                     axs[2].axis('off')
 
                     plt.tight_layout()
-                    save_path = os.path.join(save_dir, "test_predictions", f"test_{count}.png")
+                    save_name = f"test_{count}.png"
+                    save_path = os.path.join(save_dir, "test_predictions", save_name)
                     plt.savefig(save_path)
                     plt.show()
                     plt.close()
 
-                    print(f"✅ Saved prediction plot to {save_path}")
+                    log_entries.append({
+                        "saved_prediction": save_name,
+                        "raw_image_path": raw_path,
+                        "ground_truth_mask_path": seg_path
+                    })
+
+                    print(f"Saved prediction plot to {save_path}")
                     count += 1
 
                 if count >= num_to_plot:
@@ -154,13 +185,12 @@ def plot_test_predictions(test_loader, model, save_dir, device, one_image=False,
             if count >= num_to_plot:
                 break
 
-    # After loop: if one_image option
     if one_image:
         total_examples = len(all_images)
         fig, axs = plt.subplots(total_examples, 3, figsize=(12, 4 * total_examples))
 
         if total_examples == 1:
-            axs = [axs]  # ensure axs is iterable
+            axs = [axs]
 
         for idx in range(total_examples):
             axs[idx][0].imshow(all_images[idx], cmap='gray')
@@ -176,9 +206,17 @@ def plot_test_predictions(test_loader, model, save_dir, device, one_image=False,
             axs[idx][2].axis('off')
 
         plt.tight_layout()
-        save_path = os.path.join(save_dir, "test_predictions", f"test_combined.png")
+        save_path = os.path.join(save_dir, "test_predictions", "test_combined.png")
         plt.savefig(save_path)
         plt.show()
         plt.close()
 
-        print(f"✅ Saved combined prediction plot to {save_path}")
+        print(f"Saved combined prediction plot to {save_path}")
+
+    #Always save log
+    if log_entries:
+        df = pd.DataFrame(log_entries)
+        csv_path = os.path.join(save_dir, "test_predictions", "prediction_image_map.csv")
+        df.to_csv(csv_path, index=False)
+        print(f"Saved CSV mapping to {csv_path}")
+

@@ -43,6 +43,7 @@ from code.unet_training_setup import (load_segmented_ims, subsample_test,
     create_segmentation_tensor_dataset, 
     create_dataloader
 )
+
 from code.unet_training import (
     setup_training, 
     train_one_epoch, 
@@ -58,6 +59,12 @@ from code.train_classifier import load_classifier, train_model
 from code.customs_stats import load_resnet_weights, make_test_data, make_predictions, display_stats
 
 from code.spike_morpohology import ground_truth_morph, plot_spike_area, calculate_spike_stats
+from code.morphology import (
+    compare_methods, compare_methods_plotting, compare_methods_stats,
+    make_morphology_df, compare_classes_stats, compare_classes_plotting
+)
+
+from code.compare_segmentation_methods import compare_load_segmented_ims, compare_combine_dfs, build_compare_df_from_auto_manual, compare_methods_stats, compare_methods_plotting
 
 ################ Full Data Setup ################
 
@@ -84,6 +91,7 @@ _, X_test_df = train_test_split(
     stratify=final_df['class']
 )
 X_test_df = X_test_df.reset_index(drop=True)
+mask_paths_test = X_test_df['segmented_file_path'].tolist()
 # Build datasets
 train_dataset = create_segmentation_tensor_dataset(X_raw_train, X_seg_train, y_train)
 val_dataset   = create_segmentation_tensor_dataset(X_raw_val, X_seg_val, y_val)
@@ -137,7 +145,16 @@ else:
     print(" Skipping training, model weights already exist.")
 
 print("Testing")
-plot_test_predictions(test_loader, model, SAVE_DIR, DEVICE, one_image=True, max_examples=5)
+plot_test_predictions(
+    test_loader,
+    model,
+    SAVE_DIR,
+    DEVICE,
+    image_paths=X_test_df.iloc[:, 0].tolist(),
+    mask_paths=mask_paths_test, 
+    one_image=False,
+    max_examples=5
+)
 
 ################ ResNet ################
 """Use ResNet to make predictions of classification"""
@@ -157,13 +174,43 @@ else:
 
     print('model trained')
 
-X_test_df_preds = make_predictions(model, DEVICE, X_test_df, test_loader)
+X_test_df_preds = make_predictions(model, DEVICE, X_test_df, test_loader, save_cm=True, save_dir=SAVE_DIR)
 display_stats(X_test_df_preds)
 
 ############# Get Morphology statistics ###############
 
 #### Morphology ###
-df_ground_truth_morph = ground_truth_morph(final_df, segmented_path_label = 'segmented_file_path', class_label = 'class')
+# Morphology extraction
+df_ground_truth_morph = ground_truth_morph(final_df, segmented_path_label='segmented_file_path', class_label='class')
 print(df_ground_truth_morph)
 
-regression_by_class = calculate_spike_stats(df_ground_truth_morph, plot_yes =True)
+# Regression and spike area statistics
+regression_by_class = calculate_spike_stats(df_ground_truth_morph, plot_yes=True)
+
+# Class-to-class comparison
+results = compare_classes_stats(
+    df_ground_truth_morph,
+    plot_yes=True,
+    save_dir=SAVE_DIR
+)
+
+#############Comparing Manual vs Automatic Segmentation Methods #############
+# Combine all image paths and labels
+all_df = combine_dfs(convert_df, RAW_IMS_MUT, RAW_IMS_WT, SEGMENTED_MASKS_MUT, SEGMENTED_MASKS_WT, SAVE_DIR)
+print(all_df)
+
+# Optionally subsample
+final_df = subsample_test(final_df=all_df, SUBSAMPLE=SUBSAMPLE) if SUBSAMPLE is not None else all_df
+print(final_df)
+
+# Manual and automatic segmentation comparison
+all_df = compare_combine_dfs(convert_df, SEGMENTED_MASKS_WT, SEGMENTED_MASKS_MUT,
+                              AUTO_SEGMENTED_MASKS_WT, AUTO_SEGMENTED_MASKS_MUT, SAVE_DIR)
+
+df_compare = build_compare_df_from_auto_manual(all_df)
+
+df_wide = compare_methods_stats(df_compare, SAVE_DIR, plot_yes=True)
+compare_methods_plotting(df_compare)
+
+df_wide, stat, p, summary = compare_methods_stats(df_compare, SAVE_DIR, plot_yes=True)
+df_wide.to_csv(os.path.join(SAVE_DIR, "comparison_results.csv"), index=False)

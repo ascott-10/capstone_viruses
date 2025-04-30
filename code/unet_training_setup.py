@@ -38,23 +38,21 @@ def load_segmented_ims(input_path):
     
             
     for files in os.listdir(input_path):
-        if files.endswith('png'):
+        if files.lower().endswith(('.png', '.tif', '.tiff')):
             file_path = os.path.join(input_path, files)
             image_id = Path(files).stem
-            
 
-            # Check if filename matches normally
             if any(tag in image_id for tag in mut_labels):
                 label = 'mutant'
             elif any(tag in image_id for tag in wt_labels):
                 label = 'wildtype'
             else:
                 label = 'unknown'
-            
 
             image_labels.append(label)
             image_filepaths.append(file_path)
             image_ids.append(image_id)
+
 
             
 

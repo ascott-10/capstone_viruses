@@ -78,7 +78,7 @@ def make_test_data(dataframe=None, csv_path=None, csv_dir='/home/ascott10/docume
     test_loader = create_dataloader(test_dataset, batch_size=32, shuffle=False)
     return X_test_df, test_dataset, test_loader
 
-def make_predictions(model, device, X_test_df, test_loader, save_cm=False, cm_path="confusion_matrix.png"):
+def make_predictions(model, device, X_test_df, test_loader, save_cm=True, save_dir=None):
     predictions = []
     correct = 0
     total = 0
@@ -93,21 +93,22 @@ def make_predictions(model, device, X_test_df, test_loader, save_cm=False, cm_pa
             predictions.extend(predicted.tolist())
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
+
     accuracy = 100 * correct / total
     print(f"Test Accuracy: {accuracy:.2f}%")
     X_test_df_preds = X_test_df.copy()
 
-    
-
     encoder = LabelEncoder()
     encoder.fit(["wildtype", "mutant"])
     X_test_df_preds["predicted_label"] = encoder.inverse_transform(np.array(predictions))
+
     print(f"Confusion Matrix: \n {confusion_matrix(X_test_df_preds['class'], X_test_df_preds['predicted_label'])}")
     cm = confusion_matrix(
         X_test_df_preds['class'],
         X_test_df_preds['predicted_label'],
         labels=["mutant", "wildtype"]
     )
+
     import seaborn as sns
     fig = plt.figure(figsize=(6,6))
     ax = fig.add_subplot(111)
@@ -116,13 +117,18 @@ def make_predictions(model, device, X_test_df, test_loader, save_cm=False, cm_pa
     ax.set_xlabel('Predicted Label')
     ax.set_ylabel('True Label')
     ax.set_title('Confusion Matrix')
+
     plt.tight_layout()
-    if save_cm:
+    if save_cm and save_dir:
+        os.makedirs(save_dir, exist_ok=True)
+        cm_path = os.path.join(save_dir, "confusion_matrix.png")
         plt.savefig(cm_path)
     plt.show()
+
     print(X_test_df_preds['class'].value_counts())
     X_test_df_preds['predicted_label'].value_counts()
     return X_test_df_preds
+
 
 def display_stats(X_test_df_preds):
     y_test = X_test_df_preds['class']
