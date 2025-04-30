@@ -64,7 +64,7 @@ from code.morphology import (
     make_morphology_df, compare_classes_stats, compare_classes_plotting
 )
 
-from code.compare_segmentation_methods import compare_load_segmented_ims, compare_combine_dfs, build_compare_df_from_auto_manual, compare_methods_stats, compare_methods_plotting
+from code.compare_segmentation_methods import compare_load_segmented_ims, compare_combine_dfs, build_compare_df_from_auto_manual, compare_methods_stats, compare_methods_plotting, plot_spike_vs_body_area, export_full_morphology_stats
 
 ################ Full Data Setup ################
 
@@ -145,16 +145,8 @@ else:
     print(" Skipping training, model weights already exist.")
 
 print("Testing")
-plot_test_predictions(
-    test_loader,
-    model,
-    SAVE_DIR,
-    DEVICE,
-    image_paths=X_test_df.iloc[:, 0].tolist(),
-    mask_paths=mask_paths_test, 
-    one_image=False,
-    max_examples=5
-)
+plot_test_predictions(test_loader, model, SAVE_DIR, DEVICE, image_paths=X_test_df.iloc[:, 0].tolist(), mask_paths=mask_paths_test)
+
 
 ################ ResNet ################
 """Use ResNet to make predictions of classification"""
@@ -195,22 +187,30 @@ results = compare_classes_stats(
 )
 
 #############Comparing Manual vs Automatic Segmentation Methods #############
-# Combine all image paths and labels
+# Combine raw and segmented file info
 all_df = combine_dfs(convert_df, RAW_IMS_MUT, RAW_IMS_WT, SEGMENTED_MASKS_MUT, SEGMENTED_MASKS_WT, SAVE_DIR)
 print(all_df)
 
-# Optionally subsample
+# Optional subsampling
 final_df = subsample_test(final_df=all_df, SUBSAMPLE=SUBSAMPLE) if SUBSAMPLE is not None else all_df
 print(final_df)
 
-# Manual and automatic segmentation comparison
+# Compare manual vs automatic segmentations
 all_df = compare_combine_dfs(convert_df, SEGMENTED_MASKS_WT, SEGMENTED_MASKS_MUT,
                               AUTO_SEGMENTED_MASKS_WT, AUTO_SEGMENTED_MASKS_MUT, SAVE_DIR)
 
+# Build dataframe with morphological measurements
 df_compare = build_compare_df_from_auto_manual(all_df)
 
-df_wide = compare_methods_stats(df_compare, SAVE_DIR, plot_yes=True)
-compare_methods_plotting(df_compare)
-
+# Save comparison statistics and percent error plot
 df_wide, stat, p, summary = compare_methods_stats(df_compare, SAVE_DIR, plot_yes=True)
 df_wide.to_csv(os.path.join(SAVE_DIR, "comparison_results.csv"), index=False)
+
+# Plot method-by-class comparisons
+compare_methods_plotting(df_compare)
+
+# Scatterplot + Pearson r (linear + log scale), saved automatically
+plot_spike_vs_body_area(df_compare, SAVE_DIR)
+
+# Save full morphology table with spike/body/perimeter stats
+export_full_morphology_stats(df_compare, SAVE_DIR)

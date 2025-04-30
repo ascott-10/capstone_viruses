@@ -102,9 +102,9 @@ import matplotlib.pyplot as plt
 import torch
 import pandas as pd
 
-def plot_test_predictions(test_loader, model, save_dir, device, image_paths=None, mask_paths=None, one_image=False, max_examples=5):
+def plot_test_predictions(test_loader, model, SAVE_DIR, device, image_paths=None, mask_paths=None, one_image=False, max_examples=5):
     model.eval()
-    os.makedirs(os.path.join(save_dir, "test_predictions"), exist_ok=True)
+    os.makedirs(os.path.join(SAVE_DIR, "test_predictions"), exist_ok=True)
 
     num_to_plot = min(max_examples, len(test_loader.dataset))
     count = 0
@@ -166,7 +166,7 @@ def plot_test_predictions(test_loader, model, save_dir, device, image_paths=None
 
                     plt.tight_layout()
                     save_name = f"test_{count}.png"
-                    save_path = os.path.join(save_dir, "test_predictions", save_name)
+                    save_path = os.path.join(SAVE_DIR, "test_predictions", save_name)
                     plt.savefig(save_path)
                     plt.show()
                     plt.close()
@@ -206,7 +206,7 @@ def plot_test_predictions(test_loader, model, save_dir, device, image_paths=None
             axs[idx][2].axis('off')
 
         plt.tight_layout()
-        save_path = os.path.join(save_dir, "test_predictions", "test_combined.png")
+        save_path = os.path.join(SAVE_DIR, "test_predictions", "test_combined.png")
         plt.savefig(save_path)
         plt.show()
         plt.close()
@@ -216,7 +216,8 @@ def plot_test_predictions(test_loader, model, save_dir, device, image_paths=None
     #Always save log
     if log_entries:
         df = pd.DataFrame(log_entries)
-        csv_path = os.path.join(save_dir, "test_predictions", "prediction_image_map.csv")
+        csv_path = os.path.join(SAVE_DIR, "test_predictions", "prediction_image_map.csv")
         df.to_csv(csv_path, index=False)
         print(f"Saved CSV mapping to {csv_path}")
+
 

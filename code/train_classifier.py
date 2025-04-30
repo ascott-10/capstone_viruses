@@ -18,6 +18,8 @@ from torch.utils.data import DataLoader
 from torchvision import models, transforms
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
+from code.config import *
+
 # Extend path for local modules
 sys.path.append("..")
 sys.path.append('./code')
@@ -57,7 +59,7 @@ def plot_loss_and_accuracy(train_losses, val_losses, train_accuracies, val_accur
     plt.pause(2)
     plt.close()
 
-def train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=15, save_dir=None):
+def train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=NUM_EPOCHS_CLASSIFY15, save_dir=None):
     model.train()
 
     train_losses = []
@@ -151,7 +153,7 @@ def train_model(model, device, train_loader, val_loader, save_dir):
     scheduler = CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-6)
     criterion = nn.CrossEntropyLoss()
 
-    train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=15, save_dir=save_dir)
+    train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=NUM_EPOCHS_CLASSIFY15, save_dir=save_dir)
 
     for param in model.parameters():
         param.requires_grad = True
@@ -164,7 +166,7 @@ def train_model(model, device, train_loader, val_loader, save_dir):
     )
     scheduler = CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-6)
 
-    train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=15, save_dir=save_dir)
+    train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=NUM_EPOCHS_CLASSIFY15, save_dir=save_dir)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     save_path = os.path.join(save_dir, f"resnet_weights_{timestamp}.pth")

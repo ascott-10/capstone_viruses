@@ -26,17 +26,13 @@ import pandas as pd
 from pathlib import Path
 
 def load_segmented_ims(input_path):
-    """Load segmented image paths and labels based on filename patterns."""
+    """Load segmented image paths and labels based on filename patterns without duplicates."""
 
-    image_filepaths = []
-    image_labels = []
-    image_ids = []
+    image_records = []
 
     mut_labels = ['A2_MHV', 'muimage']
     wt_labels = ['MHVWT', 'wtimage']
 
-    
-            
     for files in os.listdir(input_path):
         if files.lower().endswith(('.png', '.tif', '.tiff')):
             file_path = os.path.join(input_path, files)
@@ -49,45 +45,48 @@ def load_segmented_ims(input_path):
             else:
                 label = 'unknown'
 
-            image_labels.append(label)
-            image_filepaths.append(file_path)
-            image_ids.append(image_id)
+            image_records.append((image_id, file_path, label))
 
+    # Drop duplicates based on image_id (keep first occurrence)
+    df = pd.DataFrame(image_records, columns=['image_id', 'file_path', 'label']).drop_duplicates(subset='image_id')
 
-            
+    image_ids = df['image_id'].tolist()
+    image_filepaths = df['file_path'].tolist()
+    image_labels = df['label'].tolist()
 
     return image_labels, image_filepaths, image_ids
 
 
 
-def combine_dfs(convert_df, RAW_IMS_MUT, RAW_IMS_WT, SEGMENTED_MASKS_MUT, SEGMENTED_MASKS_WT, SAVE_DIR):
-    """Combine raw images and segmented masks into one dataframe."""
 
-    #Get all file paths for raw images and manually segmented masks
+def combine_dfs(convert_df, RAW_IMS_MUT, RAW_IMS_WT, SEGMENTED_MASKS_MUT, SEGMENTED_MASKS_WT, SAVE_DIR):
+    """Combine raw images and segmented masks into one dataframe, avoiding duplicates."""
+
     image_labels_muts, image_filepaths_muts, image_ids_muts = load_segmented_ims(RAW_IMS_MUT)
     image_labels_wts, image_filepaths_wts, image_ids_wts = load_segmented_ims(RAW_IMS_WT)
     segmented_image_labels_muts, segmented_image_filepaths_muts, segmented_image_ids_muts = load_segmented_ims(SEGMENTED_MASKS_MUT)
     segmented_image_labels_wts, segmented_image_filepaths_wts, segmented_image_ids_wts = load_segmented_ims(SEGMENTED_MASKS_WT)
 
+    all_raw_files = pd.DataFrame({
+        'im_id': image_ids_muts + image_ids_wts,
+        'file_path': image_filepaths_muts + image_filepaths_wts,
+        'class': image_labels_muts + image_labels_wts
+    }).drop_duplicates(subset='im_id')
 
-    # Build DataFrames
-    all_raw_files = pd.DataFrame([
-        (image_ids_muts + image_ids_wts),
-        (image_filepaths_muts + image_filepaths_wts),
-        (image_labels_muts + image_labels_wts)
-    ], index=['im_id', 'file_path', 'class']).T
+    all_segmented_files = pd.DataFrame({
+        'im_id': segmented_image_ids_muts + segmented_image_ids_wts,
+        'segmented_file_path': segmented_image_filepaths_muts + segmented_image_filepaths_wts,
+        'class': segmented_image_labels_muts + segmented_image_labels_wts
+    }).drop_duplicates(subset='im_id')
 
-    all_segmented_files = pd.DataFrame([
-        (segmented_image_ids_muts + segmented_image_ids_wts),
-        (segmented_image_filepaths_muts + segmented_image_filepaths_wts),
-        (segmented_image_labels_muts + segmented_image_labels_wts)
-    ], index=['im_id', 'segmented_file_path', 'class']).T
-
+    # Normalize IDs
     convert_df['Modified Name'] = convert_df['Modified Name'].astype(str).str.replace(r'_corrected.*', '', regex=True)
     all_segmented_files['im_id'] = all_segmented_files['im_id'].astype(str).str.replace(r'_corrected.*', '', regex=True)
 
+    # Ensure convert_df doesn't introduce duplicates
+    convert_df = convert_df.drop_duplicates(subset='File_name')
 
-    segmented_combined = all_segmented_files.merge(convert_df, left_on='im_id', right_on = 'Modified Name')
+    segmented_combined = all_segmented_files.merge(convert_df, left_on='im_id', right_on='Modified Name')
     merged_df = all_raw_files.merge(segmented_combined, left_on='im_id', right_on='File_name')
 
     final_df = pd.DataFrame({
@@ -95,7 +94,7 @@ def combine_dfs(convert_df, RAW_IMS_MUT, RAW_IMS_WT, SEGMENTED_MASKS_MUT, SEGMEN
         'file_path': merged_df['file_path'],
         'segmented_file_path': merged_df['segmented_file_path'],
         'class': merged_df['class_x']
-    })
+    }).drop_duplicates(subset='im_id')  # Final safeguard
 
     return final_df
 
