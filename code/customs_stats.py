@@ -27,7 +27,7 @@ import glob
 
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.preprocessing import LabelEncoder
-
+import seaborn as sns
 from code.setup_classifier import load_segmented_ims, transform_data, create_tensor_dataset, create_dataloader, create_and_save_new_df
 
 print(torch.__version__)
@@ -82,6 +82,7 @@ def make_predictions(model, device, X_test_df, test_loader, save_cm=True, save_d
     predictions = []
     correct = 0
     total = 0
+
     with torch.no_grad():  
         for _, masks, labels in test_loader:
             if masks.shape[1] == 1:
@@ -96,38 +97,52 @@ def make_predictions(model, device, X_test_df, test_loader, save_cm=True, save_d
 
     accuracy = 100 * correct / total
     print(f"Test Accuracy: {accuracy:.2f}%")
-    X_test_df_preds = X_test_df.copy()
 
+    X_test_df_preds = X_test_df.copy()
     encoder = LabelEncoder()
     encoder.fit(["wildtype", "mutant"])
     X_test_df_preds["predicted_label"] = encoder.inverse_transform(np.array(predictions))
 
-    print(f"Confusion Matrix: \n {confusion_matrix(X_test_df_preds['class'], X_test_df_preds['predicted_label'])}")
+    labels = ["mutant", "wildtype"]
     cm = confusion_matrix(
         X_test_df_preds['class'],
         X_test_df_preds['predicted_label'],
-        labels=["mutant", "wildtype"]
+        labels=labels
     )
 
-    import seaborn as sns
-    fig = plt.figure(figsize=(6,6))
-    ax = fig.add_subplot(111)
-    sns.heatmap(cm, cmap='Blues', annot=True, fmt='d',
-                xticklabels=["mutant", "wildtype"], yticklabels=["mutant", "wildtype"], ax=ax)
-    ax.set_xlabel('Predicted Label')
-    ax.set_ylabel('True Label')
-    ax.set_title('Confusion Matrix')
+    # ✅ Clean green-themed confusion matrix
+    fig, ax = plt.subplots(figsize=(6, 6))
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt='d',
+        cmap="Greens",
+        xticklabels=labels,
+        yticklabels=labels,
+        cbar=False,
+        square=True,
+        linewidths=0.5,
+        linecolor='gray',
+        ax=ax
+    )
+
+    ax.set_xlabel('Predicted Label', fontsize=13)
+    ax.set_ylabel('True Label', fontsize=13)
+    ax.set_title('Confusion Matrix', fontsize=15)
+    ax.tick_params(labelsize=11)
 
     plt.tight_layout()
     if save_cm and save_dir:
         os.makedirs(save_dir, exist_ok=True)
         cm_path = os.path.join(save_dir, "confusion_matrix.png")
-        plt.savefig(cm_path)
+        plt.savefig(cm_path, dpi=300)
+        print(f"Saved confusion matrix: {cm_path}")
     plt.show()
 
     print(X_test_df_preds['class'].value_counts())
     X_test_df_preds['predicted_label'].value_counts()
     return X_test_df_preds
+
 
 
 def display_stats(X_test_df_preds):

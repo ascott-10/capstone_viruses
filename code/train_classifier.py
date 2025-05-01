@@ -31,8 +31,8 @@ def plot_loss_and_accuracy(train_losses, val_losses, train_accuracies, val_accur
     plt.figure(figsize=(12, 5))
 
     plt.subplot(1, 2, 1)
-    plt.plot(epochs, train_losses, color='tab:blue', label='Train Loss')
-    plt.plot(epochs, val_losses, color='tab:orange', label='Validation Loss')
+    plt.plot(epochs, train_losses, color=TRAIN_COLOR, label='Train Loss')
+    plt.plot(epochs, val_losses, color=VAL_COLOR, label='Validation Loss')
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.title("Training vs Validation Loss")
@@ -40,8 +40,8 @@ def plot_loss_and_accuracy(train_losses, val_losses, train_accuracies, val_accur
     plt.legend()
 
     plt.subplot(1, 2, 2)
-    plt.plot(epochs, train_accuracies, color='tab:blue', label='Train Accuracy')
-    plt.plot(epochs, val_accuracies, color='tab:orange', label='Validation Accuracy')
+    plt.plot(epochs, train_accuracies, color=TRAIN_COLOR, label='Train Accuracy')
+    plt.plot(epochs, val_accuracies, color=VAL_COLOR, label='Validation Accuracy')
     plt.xlabel("Epoch")
     plt.ylabel("Accuracy (%)")
     plt.title("Training vs Validation Accuracy")
@@ -59,7 +59,7 @@ def plot_loss_and_accuracy(train_losses, val_losses, train_accuracies, val_accur
     plt.pause(2)
     plt.close()
 
-def train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=NUM_EPOCHS_CLASSIFY15, save_dir=None):
+def train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=NUM_EPOCHS_CLASSIFY, save_dir=None):
     model.train()
 
     train_losses = []
@@ -153,7 +153,7 @@ def train_model(model, device, train_loader, val_loader, save_dir):
     scheduler = CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-6)
     criterion = nn.CrossEntropyLoss()
 
-    train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=NUM_EPOCHS_CLASSIFY15, save_dir=save_dir)
+    train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=NUM_EPOCHS_CLASSIFY, save_dir=save_dir)
 
     for param in model.parameters():
         param.requires_grad = True
@@ -166,7 +166,7 @@ def train_model(model, device, train_loader, val_loader, save_dir):
     )
     scheduler = CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-6)
 
-    train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=NUM_EPOCHS_CLASSIFY15, save_dir=save_dir)
+    train(model, device, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs=NUM_EPOCHS_CLASSIFY, save_dir=save_dir)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     save_path = os.path.join(save_dir, f"resnet_weights_{timestamp}.pth")

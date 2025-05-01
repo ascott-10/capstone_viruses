@@ -64,7 +64,9 @@ from code.morphology import (
     make_morphology_df, compare_classes_stats, compare_classes_plotting
 )
 
-from code.compare_segmentation_methods import compare_load_segmented_ims, compare_combine_dfs, build_compare_df_from_auto_manual, compare_methods_stats, compare_methods_plotting, plot_spike_vs_body_area, export_full_morphology_stats
+from code.compare_segmentation_methods import *
+
+from code.compare_segmentation_methods import compare_load_segmented_ims, compare_combine_dfs, build_compare_df_from_auto_manual, compare_methods_stats, compare_methods_plotting, plot_spike_vs_body_area
 
 ################ Full Data Setup ################
 
@@ -125,28 +127,42 @@ loss_fn, optimizer = setup_training(model, learning_rate=LEARNING_RATE)
 if not skip_training:
     train_losses = []
     val_losses = []
+    train_accuracies = []
+    val_accuracies = []
     best_val_loss = float('inf')
 
     for epoch in range(NUM_EPOCHS):
-        train_loss = train_one_epoch(model, train_loader, loss_fn, optimizer, DEVICE)
-        val_loss = validate_one_epoch(model, val_loader, loss_fn, DEVICE)
+        train_loss, train_acc = train_one_epoch(model, train_loader, loss_fn, optimizer, DEVICE)
+        val_loss, val_acc = validate_one_epoch(model, val_loader, loss_fn, DEVICE)
+
 
         print(f"Epoch [{epoch+1}/{NUM_EPOCHS}] — Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)
+        train_accuracies.append(train_acc)
+        val_accuracies.append(val_acc)
+
 
         best_val_loss = save_best_model(model, SAVE_DIR, epoch, val_loss, best_val_loss)
 
     ################ Plot Loss ################
-    plot_loss(train_losses, val_losses, save_dir=SAVE_DIR)
+    plot_loss(train_losses, val_losses, train_accuracies, val_accuracies, save_dir=SAVE_DIR)
 
 else:
     print(" Skipping training, model weights already exist.")
 
 print("Testing")
-plot_test_predictions(test_loader, model, SAVE_DIR, DEVICE, image_paths=X_test_df.iloc[:, 0].tolist(), mask_paths=mask_paths_test)
-
+plot_test_predictions(
+    test_loader,
+    model,
+    SAVE_DIR,
+    DEVICE,
+    image_paths=X_test_df.iloc[:, 0].tolist(),
+    mask_paths=mask_paths_test, 
+    one_image=False,
+    max_examples=5
+)
 
 ################ ResNet ################
 """Use ResNet to make predictions of classification"""
@@ -183,34 +199,28 @@ regression_by_class = calculate_spike_stats(df_ground_truth_morph, plot_yes=True
 results = compare_classes_stats(
     df_ground_truth_morph,
     plot_yes=True,
-    save_dir=SAVE_DIR
+    SAVE_DIR=SAVE_DIR
 )
 
 #############Comparing Manual vs Automatic Segmentation Methods #############
-# Combine raw and segmented file info
+# Combine all image paths and labels
 all_df = combine_dfs(convert_df, RAW_IMS_MUT, RAW_IMS_WT, SEGMENTED_MASKS_MUT, SEGMENTED_MASKS_WT, SAVE_DIR)
 print(all_df)
 
-# Optional subsampling
+# Optionally subsample
 final_df = subsample_test(final_df=all_df, SUBSAMPLE=SUBSAMPLE) if SUBSAMPLE is not None else all_df
 print(final_df)
 
-# Compare manual vs automatic segmentations
+# Manual and automatic segmentation comparison
 all_df = compare_combine_dfs(convert_df, SEGMENTED_MASKS_WT, SEGMENTED_MASKS_MUT,
                               AUTO_SEGMENTED_MASKS_WT, AUTO_SEGMENTED_MASKS_MUT, SAVE_DIR)
 
-# Build dataframe with morphological measurements
 df_compare = build_compare_df_from_auto_manual(all_df)
 
-# Save comparison statistics and percent error plot
+df_wide = compare_methods_stats(df_compare, SAVE_DIR, plot_yes=True)
+compare_methods_plotting(df_compare)
+
 df_wide, stat, p, summary = compare_methods_stats(df_compare, SAVE_DIR, plot_yes=True)
 df_wide.to_csv(os.path.join(SAVE_DIR, "comparison_results.csv"), index=False)
 
-# Plot method-by-class comparisons
-compare_methods_plotting(df_compare)
-
-# Scatterplot + Pearson r (linear + log scale), saved automatically
-plot_spike_vs_body_area(df_compare, SAVE_DIR)
-
-# Save full morphology table with spike/body/perimeter stats
-export_full_morphology_stats(df_compare, SAVE_DIR)
+plot_spike_vs_body_area(df_compare, SAVE_DIR=SAVE_DIR)

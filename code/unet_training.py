@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import os
 import matplotlib.pyplot as plt
+from config import *
 
 def setup_training(model, learning_rate=1e-4):
     """
@@ -15,45 +16,54 @@ def setup_training(model, learning_rate=1e-4):
 def train_one_epoch(model, dataloader, loss_fn, optimizer, device):
     model.train()
     running_loss = 0.0
+    correct = 0
+    total = 0
+
     for images, masks, _ in dataloader:
+        
         images = images.to(device)
         masks = masks.to(device)
 
-        outputs = model(images)
-
-        # Resize outputs to match masks if needed
-        if outputs.shape != masks.shape:
-            outputs = torch.nn.functional.interpolate(outputs, size=masks.shape[2:], mode='bilinear', align_corners=False)
-
-        loss = loss_fn(outputs, masks)
-
         optimizer.zero_grad()
+        outputs = model(images)
+        loss = loss_fn(outputs, masks)
         loss.backward()
         optimizer.step()
 
         running_loss += loss.item()
+        preds = (torch.sigmoid(outputs) > 0.5).float()
+        correct += (preds == masks).sum().item()
+        total += masks.numel()
 
-    return running_loss / len(dataloader)
+    avg_loss = running_loss / len(dataloader)
+    accuracy = 100 * correct / total
+    return avg_loss, accuracy
+
 
 
 def validate_one_epoch(model, dataloader, loss_fn, device):
     model.eval()
     running_loss = 0.0
+    correct = 0
+    total = 0
+
     with torch.no_grad():
         for images, masks, _ in dataloader:
+            
             images = images.to(device)
             masks = masks.to(device)
 
             outputs = model(images)
-
-            # Resize outputs to match masks if needed
-            if outputs.shape != masks.shape:
-                outputs = torch.nn.functional.interpolate(outputs, size=masks.shape[2:], mode='bilinear', align_corners=False)
-
             loss = loss_fn(outputs, masks)
             running_loss += loss.item()
 
-    return running_loss / len(dataloader)
+            preds = (torch.sigmoid(outputs) > 0.5).float()
+            correct += (preds == masks).sum().item()
+            total += masks.numel()
+
+    avg_loss = running_loss / len(dataloader)
+    accuracy = 100 * correct / total
+    return avg_loss, accuracy
 
 
 def save_best_model(model, save_dir, epoch, val_loss, best_val_loss):
@@ -69,27 +79,42 @@ def save_best_model(model, save_dir, epoch, val_loss, best_val_loss):
     else:
         return best_val_loss
 
-def plot_loss(train_losses, val_losses, save_dir=None):
+def plot_loss(train_losses, val_losses, train_accuracies, val_accuracies, save_dir=None):
     """
-    Plots training and validation loss curves.
+    Plots training/validation loss and accuracy curves.
     """
-    plt.figure(figsize=(8,6))
-    plt.plot(train_losses, label="Train Loss")
-    plt.plot(val_losses, label="Validation Loss")
+    plt.figure(figsize=(12, 5))
+
+    # Plot Loss
+    plt.subplot(1, 2, 1)
+    plt.plot(train_losses, label="Train Loss", color=TRAIN_COLOR)
+    plt.plot(val_losses, label="Validation Loss", color=VAL_COLOR)
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.title("Training vs Validation Loss")
     plt.grid(True)
     plt.legend()
 
+    # Plot Accuracy
+    plt.subplot(1, 2, 2)
+    plt.plot(train_accuracies, label="Train Accuracy", color=TRAIN_COLOR)
+    plt.plot(val_accuracies, label="Validation Accuracy", color=VAL_COLOR)
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy (%)")
+    plt.title("Training vs Validation Accuracy")
+    plt.grid(True)
+    plt.legend()
+
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, "loss_curve.png")
+        save_path = os.path.join(save_dir, "loss_accuracy_curves.png")
         plt.savefig(save_path)
-        print(f"Loss curve saved at {save_path}")
+        print(f"Loss and accuracy curves saved at {save_path}")
+
     plt.show(block=False)
-    plt.pause(2) 
+    plt.pause(2)
     plt.close()
+
 
 
 import os

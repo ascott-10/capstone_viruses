@@ -430,37 +430,51 @@ def compare_classes_stats(df_ground_truth_morph, plot_yes=None, save_dir=None, s
     return results
 
 
+from config import COLOR_MUTANT, COLOR_WILDTYPE, FONT_SIZE_TITLE, FONT_SIZE_LABEL, FONT_SIZE_TICK
+
 def compare_classes_plotting(df_ground_truth_morph, save_dir=None, save_name="class_comparison_boxplot.png", show_plot=False):
     import matplotlib.pyplot as plt
     import seaborn as sns
     import os
 
     metrics = ['Total_Spike_Area_Per_Particle', 'Spike_Count']
+    class_palette = {'mutant': COLOR_MUTANT, 'wildtype': COLOR_WILDTYPE}
 
     fig, ax = plt.subplots(1, 2, figsize=(14, 6))
 
-    sns.boxplot(data=df_ground_truth_morph, x='Class', y='Total_Spike_Area_Per_Particle', ax=ax[0])
-    ax[0].set_title('Total Spike Area by Class')
-    ax[0].set_ylabel("Total Spike Area")
-    ax[0].set_xlabel('Class')
+    sns.boxplot(
+        data=df_ground_truth_morph, 
+        x='Class', y='Total_Spike_Area_Per_Particle', 
+        ax=ax[0], palette=class_palette
+    )
+    ax[0].set_title('Total Spike Area by Class', fontsize=FONT_SIZE_TITLE)
+    ax[0].set_ylabel("Total Spike Area", fontsize=FONT_SIZE_LABEL)
+    ax[0].set_xlabel('Class', fontsize=FONT_SIZE_LABEL)
+    ax[0].tick_params(labelsize=FONT_SIZE_TICK)
 
-    sns.boxplot(data=df_ground_truth_morph, x='Class', y='Spike_Count', ax=ax[1])
-    ax[1].set_title('Spike Count by Class')
-    ax[1].set_ylabel("Spike Count")
-    ax[1].set_xlabel('Class')
+    sns.boxplot(
+        data=df_ground_truth_morph, 
+        x='Class', y='Spike_Count', 
+        ax=ax[1], palette=class_palette
+    )
+    ax[1].set_title('Spike Count by Class', fontsize=FONT_SIZE_TITLE)
+    ax[1].set_ylabel("Spike Count", fontsize=FONT_SIZE_LABEL)
+    ax[1].set_xlabel('Class', fontsize=FONT_SIZE_LABEL)
+    ax[1].tick_params(labelsize=FONT_SIZE_TICK)
 
     plt.tight_layout()
 
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, save_name)
-        plt.savefig(save_path)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Saved plot to: {save_path}")
 
     if show_plot:
         plt.show()
     else:
-        plt.close(fig)  # prevent memory buildup in headless runs
+        plt.close(fig)
+
 
 
 

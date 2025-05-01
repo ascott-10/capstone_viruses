@@ -22,10 +22,16 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib import cm
+from scipy.stats import linregress, pearsonr
 
 import glob
 import os
-
+from scipy.stats import linregress, pearsonr
+import pandas as pd
+from config import *
 
 from scipy.stats import mannwhitneyu
 import scipy.stats as stats
@@ -150,60 +156,65 @@ def ground_truth_morph(df_final, segmented_path_label, class_label):
     
     return df
 
-from scipy.stats import linregress, pearsonr
-import pandas as pd
-from config import *
+
 
 def plot_spike_area(ground_truth_morph, SAVE_DIR):
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    from matplotlib import cm
+    os.makedirs(SAVE_DIR, exist_ok=True)
 
-    paired = cm.get_cmap('Paired', 6)
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Use custom colors from config
     class_colors = {
-        'mutant': paired(0),
-        'wildtype': paired(1)
+        'mutant': COLOR_MUTANT,
+        'wildtype': COLOR_WILDTYPE
     }
 
-    manual_reg_color = 'black'
-
-    fig, ax = plt.subplots(figsize=(7, 6))
-
+    # Scatterplot
     sns.scatterplot(
         data=ground_truth_morph,
-        y='Spike_Count',
         x='Total_Spike_Area_Per_Particle',
+        y='Spike_Count',
         hue='Class',
         style='Class',
         palette=class_colors,
-        s=60,
-        alpha=0.9,
+        s=70,
+        alpha=0.8,
+        edgecolor='black',
+        linewidth=0.4,
         ax=ax
     )
+
+    # Regression line (all points combined)
     sns.regplot(
         data=ground_truth_morph,
-        y='Spike_Count',
         x='Total_Spike_Area_Per_Particle',
+        y='Spike_Count',
         scatter=False,
-        color=manual_reg_color,
-        label='Manual Regression',
+        color='black',
+        label='Linear Regression',
+        line_kws={'linewidth': 2},
         ax=ax
     )
 
-    ax.set_title('Predicted Spike Count vs. Calculated Spike Area')
-    ax.set_xlabel('Total Spike Area')
-    ax.set_ylabel('Predicted Spike Count')
-    ax.grid(True)
+    ax.set_title('Predicted Spike Count vs. Calculated Spike Area', fontsize=16)
+    ax.set_xlabel('Total Spike Area', fontsize=14)
+    ax.set_ylabel('Predicted Spike Count', fontsize=14)
+    ax.tick_params(axis='both', labelsize=12)
+    ax.legend(title='Class', fontsize=12, title_fontsize=13, loc='upper left')
 
+    ax.grid(True)
     plt.tight_layout()
+
     save_path = os.path.join(SAVE_DIR, "spike_area_plot.png")
-    plt.savefig(save_path)
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.show()
+    print(f"✅ Saved spike area plot to: {save_path}")
+
 
 
 
 def calculate_spike_stats(ground_truth_morph_df, plot_yes=True):
-    from scipy.stats import linregress, pearsonr
+
 
     results = []
 

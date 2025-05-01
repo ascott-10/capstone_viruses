@@ -160,7 +160,7 @@ def compare_methods_plotting(df_compare):
     ax[0].set_yscale("log")
     ax[0].legend(loc='lower center', bbox_to_anchor=(0.5, -0.25), ncol=2, frameon=False)
 
-    sns.swarmplot(data=df_long, x='Method', y='Spike Area', hue='Class',
+    sns.swarmplot(data=df_long, x='Method', y='Spike Area', hue='Class', 
                   dodge=True, alpha=0.6, size=3, ax=ax[1])
     ax[1].set_title('Spike Area by Class and Method')
     ax[1].set_ylabel("Spike Area (log scale)")

@@ -16,7 +16,7 @@ if ENVIRONMENT == "school":
     RAW_IMS_MUT = '/home/ariellescott/Documents/capstone/raw_ims/raw_mutant/'
     SEGMENTED_MASKS_WT = '/home/ariellescott/Documents/capstone/segmented_ims/'
     SEGMENTED_MASKS_MUT = '/home/ariellescott/Documents/capstone/segmented_ims/'
-    AUTO_SEGMENTED_MASKS_MUT = '/home/ariellescott/Documents/capstone/segmented_ims/'
+    AUTO_SEGMENTED_MASKS_WT = '/home/ariellescott/Documents/capstone/segmented_ims/'
     AUTO_SEGMENTED_MASKS_MUT = '/home/ariellescott/Documents/capstone/segmented_ims/'
     SAVE_DIR = '/home/ariellescott/Documents/capstone/capstone_viruses/results/'
     INPUT_DIR = '/home/ariellescott/Documents/capstone/capstone_viruses/results/'
@@ -39,8 +39,8 @@ else:
 
 # ======== TRAINING SETTINGS ========
 
-NUM_EPOCHS = 15
-NUM_EPOCHS_CLASSIFY = 35
+NUM_EPOCHS = 10
+NUM_EPOCHS_CLASSIFY = 10
 BATCH_SIZE = 4
 LEARNING_RATE = 1e-4
 
@@ -50,7 +50,26 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # ======== OTHER SETTINGS ========
 
-SUBSAMPLE = 60
+SUBSAMPLE = 25
 IMAGE_SIZE = (256,256)
 SEED = 42
 NEW_CLASSIFY = True
+
+# Color scheme for plotting
+TRAIN_COLOR = 'mediumseagreen'
+VAL_COLOR = 'darkgreen'
+# General green-themed plotting colors
+FONT_SIZE = 14  # or whatever size you want
+FONT_SIZE_TITLE = 14
+FONT_SIZE_LABEL = 12
+FONT_SIZE_TICK = 10
+COLOR_GENERAL_1 = "#4CAF50"       # green
+COLOR_GENERAL_2 = "#81C784"       # lighter green
+COLOR_MUTANT = "#f28cb1"          # default pink
+COLOR_MUTANT_BRIGHT = "#ffb6c1"   # brighter pink
+COLOR_WILDTYPE = "#66bb6a"        # green
+SAVE_DPI = 300
+
+# For classifier confusion matrix (mutant vs wildtype)
+CONFUSION_MATRIX_CMAP = ["#F48FB1", "#66BB6A"]  # pink to green
+
