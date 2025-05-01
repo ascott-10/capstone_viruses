@@ -1,9 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import os
+import sys, os
+
+
+from code.config import *
+
+
 import matplotlib.pyplot as plt
-from config import *
+
 
 def setup_training(model, learning_rate=1e-4):
     """

@@ -1,42 +1,25 @@
+import os
+import re
+import glob
+import numpy as np
 import pandas as pd
-import numpy as np
-import re
-from code.unet_training_setup import load_segmented_ims
-from code.morphology import extract_morphology
-from pathlib import Path
-
-import os
-
-
-import numpy as np
-import os
-import re
-
 import matplotlib.pyplot as plt
 import seaborn as sns
+from pathlib import Path
+from scipy import stats
+from scipy.stats import mannwhitneyu, wilcoxon, pearsonr
+
 from code.unet_training_setup import load_segmented_ims
 from code.morphology import extract_morphology
-
-import pandas as pd
-import numpy as np
-import os
-import re
 from config import *
-from code.unet_training_setup import load_segmented_ims
-from code.morphology import extract_morphology
 
+# ----------------------------------------
 def compare_load_segmented_ims(input_path):
-    """Load segmented image paths and labels based on filename patterns."""
-
-    image_filepaths = []
-    image_labels = []
-    image_ids = []
+    image_filepaths, image_labels, image_ids = [], [], []
 
     mut_labels = ['A2_MHV', 'muimage']
     wt_labels = ['MHVWT', 'wtimage']
 
-    
-            
     for files in os.listdir(input_path):
         if files.lower().endswith(('.png', '.tif', '.tiff')):
             file_path = os.path.join(input_path, files)
@@ -53,18 +36,14 @@ def compare_load_segmented_ims(input_path):
             image_filepaths.append(file_path)
             image_ids.append(image_id)
 
-
-            
-
     return image_labels, image_filepaths, image_ids
 
-
-
+# ----------------------------------------
 def compare_combine_dfs(convert_df, SEGMENTED_MASKS_WT, SEGMENTED_MASKS_MUT, AUTO_SEGMENTED_MASKS_WT, AUTO_SEGMENTED_MASKS_MUT, SAVE_DIR):
     manual_labels_muts, manual_filepaths_muts, manual_ids_muts = compare_load_segmented_ims(SEGMENTED_MASKS_MUT)
     manual_labels_wts, manual_filepaths_wts, manual_ids_wts = compare_load_segmented_ims(SEGMENTED_MASKS_WT)
-    auto_image_labels_muts, auto_image_filepaths_muts, auto_image_ids_muts = compare_load_segmented_ims(AUTO_SEGMENTED_MASKS_MUT)
-    auto_image_labels_wts, auto_image_filepaths_wts, auto_image_ids_wts = compare_load_segmented_ims(AUTO_SEGMENTED_MASKS_WT)
+    auto_labels_muts, auto_filepaths_muts, auto_ids_muts = compare_load_segmented_ims(AUTO_SEGMENTED_MASKS_MUT)
+    auto_labels_wts, auto_filepaths_wts, auto_ids_wts = compare_load_segmented_ims(AUTO_SEGMENTED_MASKS_WT)
 
     all_manual_files = pd.DataFrame({
         'im_id': manual_ids_muts + manual_ids_wts,
@@ -73,88 +52,55 @@ def compare_combine_dfs(convert_df, SEGMENTED_MASKS_WT, SEGMENTED_MASKS_MUT, AUT
     }).drop_duplicates()
 
     all_auto_files = pd.DataFrame({
-        'im_id': auto_image_ids_muts + auto_image_ids_wts,
-        'auto_segmented_file_path': auto_image_filepaths_muts + auto_image_filepaths_wts,
-        'class': auto_image_labels_muts + auto_image_labels_wts
+        'im_id': auto_ids_muts + auto_ids_wts,
+        'auto_segmented_file_path': auto_filepaths_muts + auto_filepaths_wts,
+        'class': auto_labels_muts + auto_labels_wts
     }).drop_duplicates()
 
     convert_df['Modified Name'] = convert_df['Modified Name'].astype(str).str.replace(r'_corrected.*', '', regex=True)
     all_manual_files['im_id'] = all_manual_files['im_id'].astype(str).str.replace(r'_corrected.*', '', regex=True)
     all_auto_files['im_id'] = all_auto_files['im_id'].astype(str).str.replace(r'_seg_ver2.*', '', regex=True)
 
-    print('all auto files', all_auto_files)
-    print('all manual files', all_manual_files)
-
     manual_segmented_with_convert = all_manual_files.merge(convert_df, left_on='im_id', right_on='Modified Name')
-    print('manual_segmented_with_convert', manual_segmented_with_convert)
     merged_df = manual_segmented_with_convert.merge(all_auto_files, left_on='File_name', right_on='im_id')
 
-    final_df = pd.DataFrame({'im_id': merged_df['im_id_y'], 
-                             'manual_segmented_file_path': merged_df['manual_segmented_file_path'],
-                             'auto_segmented_file_path': merged_df['auto_segmented_file_path'],
-                             'class': merged_df['class_x']})
-    
-    return final_df
+    return pd.DataFrame({
+        'im_id': merged_df['im_id_y'],
+        'manual_segmented_file_path': merged_df['manual_segmented_file_path'],
+        'auto_segmented_file_path': merged_df['auto_segmented_file_path'],
+        'class': merged_df['class_x']
+    })
 
-
-    
-
-
+# ----------------------------------------
 def build_compare_df_from_auto_manual(all_df):
-    df_compare = all_df[['im_id', 'class', 'manual_segmented_file_path', 'auto_segmented_file_path']].copy()
-    df_compare.rename(columns={
+    df_compare = all_df.rename(columns={
         'im_id': 'Image_ID',
         'class': 'Class',
         'manual_segmented_file_path': 'manual_path',
         'auto_segmented_file_path': 'auto_path'
-    }, inplace=True)
+    })
 
-    df_compare['Spike Area Manual'] = np.nan
-    df_compare['Spike Area Automatic'] = np.nan
-    df_compare['Body Area Manual'] = np.nan
-    df_compare['Body Area Automatic'] = np.nan
-    df_compare['Body Perimeter Manual'] = np.nan
-    df_compare['Body Perimeter Automatic'] = np.nan
+    for col in ['Spike Area Manual', 'Spike Area Automatic', 'Body Area Manual', 'Body Area Automatic', 'Body Perimeter Manual', 'Body Perimeter Automatic']:
+        df_compare[col] = np.nan
 
     for idx, row in df_compare.iterrows():
         try:
             body_manual, spike_manual = extract_morphology(row['manual_path'])
             body_auto, spike_auto = extract_morphology(row['auto_path'])
 
-            # Spike areas
             df_compare.at[idx, 'Spike Area Manual'] = spike_manual['Area'].sum()
             df_compare.at[idx, 'Spike Area Automatic'] = spike_auto['Area'].sum()
-
-            # Body areas & perimeters
             df_compare.at[idx, 'Body Area Manual'] = body_manual['Area'].sum()
             df_compare.at[idx, 'Body Area Automatic'] = body_auto['Area'].sum()
             df_compare.at[idx, 'Body Perimeter Manual'] = body_manual['Perimeter'].sum()
             df_compare.at[idx, 'Body Perimeter Automatic'] = body_auto['Perimeter'].sum()
-
         except Exception as e:
             print(f"Skipping {row['Image_ID']}: {e}")
             continue
 
-    df_compare = df_compare.dropna(subset=['Spike Area Manual', 'Spike Area Automatic'])
-    return df_compare
+    return df_compare.dropna(subset=['Spike Area Manual', 'Spike Area Automatic'])
 
-
-
-
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
-import pandas as pd
-from scipy.stats import mannwhitneyu
-import numpy as np
-
-from code.config import (
-    COLOR_MUTANT_BRIGHT, COLOR_WILDTYPE,
-    FONT_SIZE, FONT_SIZE_TITLE, FONT_SIZE_LABEL, FONT_SIZE_TICK,
-    SAVE_DPI, SAVE_DIR
-)
-
+# ----------------------------------------
 def add_stat_annotation(ax, data, y_col, group_col, class_col, color):
     classes = data[class_col].unique()
     for class_val in classes:
@@ -163,102 +109,83 @@ def add_stat_annotation(ax, data, y_col, group_col, class_col, color):
         group2 = subset[subset[group_col] == f'{y_col} Automatic'][y_col]
         stat, p = mannwhitneyu(group1, group2, alternative='two-sided')
 
-        # Determine position for annotation
-        max_y = max(subset[y_col].max(), 1e-6)
-        y = max_y * 1.2
-        x1, x2 = 0, 1
-        ax.plot([x1, x2], [y, y], lw=1.5, color=color)
-        ax.text((x1 + x2) / 2, y * 1.05, f"p = {p:.3e}", ha='center', fontsize=FONT_SIZE_TICK, color=color)
+        y = max(subset[y_col].max(), 1e-6) * 1.2
+        ax.plot([0, 1], [y, y], lw=1.5, color=color)
+        ax.text(0.5, y * 1.05, f"p = {p:.3e}", ha='center', fontsize=FONT_SIZE_TICK, color=color)
         print(f"{y_col} ({class_val}): p = {p:.3e}")
 
+# ----------------------------------------
 def compare_spike_and_body_plotting(df_compare):
-    df_spike = df_compare.melt(
-        id_vars=['Image_ID', 'Class'],
-        value_vars=['Spike Area Manual', 'Spike Area Automatic'],
-        var_name='Method',
-        value_name='Spike Area'
-    )
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import os
 
-    df_body = df_compare.melt(
-        id_vars=['Image_ID', 'Class'],
-        value_vars=['Body Area Manual', 'Body Area Automatic'],
-        var_name='Method',
-        value_name='Body Area'
-    )
+    sns.set_context("notebook", font_scale=1.5)  # ⬅️ Increase overall font scale
 
-    class_palette = {
-        'mutant': COLOR_MUTANT_BRIGHT,
-        'wildtype': COLOR_WILDTYPE
-    }
+    # Define melt operations
+    melt_params = [
+    ("Spike Area", "Spike Area Manual", "Spike Area Automatic"),
+    ("Body Area", "Body Area Manual", "Body Area Automatic"),
+    ("Body Perimeter", "Body Perimeter Manual", "Body Perimeter Automatic"),
+]
 
-    fig, axs = plt.subplots(1, 2, figsize=(14, 6))
-    sns.set_context("notebook", font_scale=1.2)
 
-    # Spike Area Plot
-    sns.stripplot(
-        data=df_spike,
-        x='Method',
-        y='Spike Area',
-        hue='Class',
-        dodge=True,
-        alpha=0.7,
-        size=5,
-        palette=class_palette,
-        jitter=True,
-        ax=axs[0]
-    )
-    axs[0].set_yscale("log")
-    axs[0].set_title('Spike Area by Method', fontsize=FONT_SIZE_TITLE)
-    axs[0].set_ylabel("Spike Area (log scale)", fontsize=FONT_SIZE_LABEL)
-    axs[0].set_xlabel("Segmentation Method", fontsize=FONT_SIZE_LABEL)
-    axs[0].tick_params(labelsize=FONT_SIZE_TICK)
-    axs[0].legend_.remove()
-    add_stat_annotation(axs[0], df_spike, 'Spike Area', 'Method', 'Class', 'black')
+    class_palette = {'mutant': COLOR_MUTANT_BRIGHT, 'wildtype': COLOR_WILDTYPE}
 
-    # Body Area Plot
-    sns.stripplot(
-        data=df_body,
-        x='Method',
-        y='Body Area',
-        hue='Class',
-        dodge=True,
-        alpha=0.7,
-        size=5,
-        palette=class_palette,
-        jitter=True,
-        ax=axs[1]
-    )
-    axs[1].set_yscale("log")
-    axs[1].set_title('Body Area by Method', fontsize=FONT_SIZE_TITLE)
-    axs[1].set_ylabel("Body Area (log scale)", fontsize=FONT_SIZE_LABEL)
-    axs[1].set_xlabel("Segmentation Method", fontsize=FONT_SIZE_LABEL)
-    axs[1].tick_params(labelsize=FONT_SIZE_TICK)
-    axs[1].legend(title='Class', frameon=False, fontsize=FONT_SIZE, title_fontsize=FONT_SIZE_LABEL, loc='upper right')
-    add_stat_annotation(axs[1], df_body, 'Body Area', 'Method', 'Class', 'black')
+    fig, axs = plt.subplots(2, 2, figsize=(16, 12))  # ⬅️ 2x2 layout for 4 plots
+    axs = axs.flatten()
+
+    for idx, (label, manual_col, auto_col) in enumerate(melt_params):
+        df_melted = df_compare.melt(
+            id_vars=['Image_ID', 'Class'],
+            value_vars=[manual_col, auto_col],
+            var_name='Method',
+            value_name=label
+        )
+
+        ax = axs[idx]
+        sns.stripplot(
+            data=df_melted,
+            x='Method',
+            y=label,
+            hue='Class',
+            dodge=True,
+            alpha=0.7,
+            size=5,
+            palette=class_palette,
+            jitter=True,
+            ax=ax
+        )
+
+        ax.set_yscale("log")
+        ax.set_title(f'{label}', fontsize=FONT_SIZE_TITLE + 2)
+        ax.set_ylabel(f"{label} (log scale)", fontsize=FONT_SIZE_LABEL + 2)
+        ax.set_xlabel("Segmentation Method", fontsize=FONT_SIZE_LABEL + 2)
+        ax.tick_params(labelsize=FONT_SIZE_TICK + 2)
+
+        if idx == 3:  # only last plot gets legend
+            ax.legend(title='Class', frameon=False, fontsize=FONT_SIZE + 2,
+                      title_fontsize=FONT_SIZE_LABEL + 2, loc='upper right')
+        else:
+            if ax.legend_:
+                ax.legend_.remove()
+
+        #add_stat_annotation(ax, df_melted, label, 'Method', 'Class', 'black')
 
     plt.tight_layout()
-
-    save_path = os.path.join(SAVE_DIR, "spike_and_body_area_comparison.png")
+    save_path = os.path.join(SAVE_DIR, "spike_body_area_perimeter_comparison.png")
     plt.savefig(save_path, dpi=SAVE_DPI, bbox_inches='tight')
     print(f"✅ Plot with stats saved to: {save_path}")
     plt.show()
 
 
-
-import os
-import glob
-import numpy as np
-import pandas as pd
-from scipy import stats
-from scipy.stats import mannwhitneyu, wilcoxon
-
-
-# 95% CI helper
+# ----------------------------------------
 def mean_ci(data, confidence=0.95):
     m, se = np.mean(data), stats.sem(data)
     h = se * stats.t.ppf((1 + confidence) / 2., len(data)-1)
     return m, m-h, m+h
 
+# ----------------------------------------
 def compare_methods_stats(df_compare, SAVE_DIR, plot_yes=None):
     if df_compare.empty:
         print(" No data to analyze.")
@@ -269,9 +196,7 @@ def compare_methods_stats(df_compare, SAVE_DIR, plot_yes=None):
         value_vars=['Spike Area Manual', 'Spike Area Automatic'],
         var_name='Method',
         value_name='Spike Area'
-    )
-
-    df_long = df_long.groupby(['Image_ID', 'Class', 'Method'])['Spike Area'].mean().reset_index()
+    ).groupby(['Image_ID', 'Class', 'Method'])['Spike Area'].mean().reset_index()
 
     try:
         df_wide = df_long.pivot(index=['Image_ID', 'Class'], columns='Method', values='Spike Area').reset_index()
@@ -282,11 +207,13 @@ def compare_methods_stats(df_compare, SAVE_DIR, plot_yes=None):
 
     df_wide = df_wide.rename(columns={
         'Spike Area Manual': 'Manual',
-        'Spike Area Automatic': 'Auto'})
+        'Spike Area Automatic': 'Auto'
+    })
 
-    df_wide['Percent_Error'] = np.where(df_wide['Manual'] != 0,
-                                        np.abs(df_wide['Auto'] - df_wide['Manual']) / df_wide['Manual'] * 100,
-                                        np.nan)
+    df_wide['Percent_Error'] = df_wide.apply(
+        lambda row: np.abs(row['Auto'] - row['Manual']) / row['Manual'] * 100 if row['Manual'] != 0 else np.nan,
+        axis=1
+    )
     df_wide['Abs_Difference'] = np.abs(df_wide['Manual'] - df_wide['Auto'])
 
     paired_df = df_wide.dropna(subset=['Manual', 'Auto'])
@@ -295,10 +222,7 @@ def compare_methods_stats(df_compare, SAVE_DIR, plot_yes=None):
     print("Wilcoxon Signed-Rank Test: Manual vs Automatic Spike Area")
     print(f"  Statistic = {stat:.4f}")
     print(f"  p-value   = {p:.6f}")
-    if p < 0.05:
-        print("  There is a statistically significant difference between Manual and Automatic methods.")
-    else:
-        print("  No significant difference between Manual and Automatic methods.")
+    print("  Significant!" if p < 0.05 else "  Not significant.")
 
     summary = {}
     for cls in ['mutant', 'wildtype']:
@@ -310,153 +234,109 @@ def compare_methods_stats(df_compare, SAVE_DIR, plot_yes=None):
         }
 
     if plot_yes:
-        classes = ['mutant', 'wildtype']
-        means = []
-        errors = []
-
-        for cls in classes:
+        means, errors = [], []
+        for cls in ['mutant', 'wildtype']:
             data = df_wide[df_wide['Class'] == cls]['Percent_Error'].dropna()
             mean, lower, upper = mean_ci(data)
             means.append(mean)
             errors.append(mean - lower)
 
-        plt.bar(classes, means, yerr=errors, capsize=5)
+        plt.bar(['mutant', 'wildtype'], means, yerr=errors, capsize=5, color=[COLOR_MUTANT_BRIGHT, COLOR_WILDTYPE])
         plt.ylabel('Mean Percent Error (%)')
-        plt.title('Difference in Calculation Between Manual and Automatic')
-        plt.savefig(os.path.join(SAVE_DIR, "percent_error_barplot.png"), dpi=300, bbox_inches='tight')
-        print(f"Saved: {os.path.join(SAVE_DIR, 'percent_error_barplot.png')}")
+        plt.title('Manual vs Automatic: Spike Area')
+        plt.tight_layout()
+        plot_path = os.path.join(SAVE_DIR, "percent_error_barplot.png")
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"Saved: {plot_path}")
         plt.show()
 
     return df_wide, stat, p, summary
 
-
-    
+# ----------------------------------------
 def compare_classes_stats(df_ground_truth_morph, plot_yes=None, SAVE_DIR=None, save_name="class_comparison_stats.csv"):
     metrics = ['Total_Spike_Area_Per_Particle', 'Spike_Count']
     results = {}
 
     for metric in metrics:
-        data_mutant = df_ground_truth_morph[df_ground_truth_morph['Class'] == 'mutant'][metric].dropna()
-        data_wildtype = df_ground_truth_morph[df_ground_truth_morph['Class'] == 'wildtype'][metric].dropna()
+        mutant = df_ground_truth_morph[df_ground_truth_morph['Class'] == 'mutant'][metric].dropna()
+        wildtype = df_ground_truth_morph[df_ground_truth_morph['Class'] == 'wildtype'][metric].dropna()
 
-        stat, p = mannwhitneyu(data_mutant, data_wildtype, alternative='two-sided')
-
+        stat, p = mannwhitneyu(mutant, wildtype, alternative='two-sided')
         results[metric] = {
-            'Mutant_Mean': np.mean(data_mutant),
-            'Wildtype_Mean': np.mean(data_wildtype),
+            'Mutant_Mean': np.mean(mutant),
+            'Wildtype_Mean': np.mean(wildtype),
             'Mann-Whitney_Statistic': stat,
             'p-value': p
         }
 
-        print(f"Comparison for {metric}:")
-        print(f"  Mann-Whitney U statistic = {stat:.8f}")
-        print(f"  p-value = {p:.8f}")
-        if p < 0.05:
-            print("  Statistically significant difference between mutant and wildtype.")
-        else:
-            print("  No significant difference between mutant and wildtype.")
-        print()
+        print(f"→ {metric}: U = {stat:.4f}, p = {p:.4e} ({'Significant' if p < 0.05 else 'Not significant'})")
 
-    if plot_yes:
-        for metric in metrics:
+        if plot_yes:
             plt.figure(figsize=(6, 5))
-            sns.boxplot(data=df_ground_truth_morph, x='Class', y=metric)
-            plt.title(f'Comparison of {metric} by Class')
-            plt.ylabel(metric)
-            plt.xlabel('Class')
+            sns.boxplot(data=df_ground_truth_morph, x='Class', y=metric, palette={'mutant': COLOR_MUTANT_BRIGHT, 'wildtype': COLOR_WILDTYPE})
+            plt.title(f'{metric} by Class')
             plt.tight_layout()
             plt.show()
 
     if SAVE_DIR:
         os.makedirs(SAVE_DIR, exist_ok=True)
-        save_path = os.path.join(SAVE_DIR, save_name)
-        pd.DataFrame(results).T.to_csv(save_path)
-        print(f"Saved stats to: {save_path}")
+        pd.DataFrame(results).T.to_csv(os.path.join(SAVE_DIR, save_name))
+        print(f"Saved stats to: {os.path.join(SAVE_DIR, save_name)}")
 
     return results
 
-
+# ----------------------------------------
 def plot_spike_vs_body_area(df_compare, SAVE_DIR, base_filename="spike_vs_body_area"):
     os.makedirs(SAVE_DIR, exist_ok=True)
     results = []
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
+    for log in [False, True]:
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
 
-    for i, (area_col, spike_col, title, ax) in enumerate([
-        ('Body Area Manual', 'Spike Area Manual', 'Manual Segmentation', axes[0]),
-        ('Body Area Automatic', 'Spike Area Automatic', 'Automatic Segmentation', axes[1])
-    ]):
-        for cls in ['mutant', 'wildtype']:
-            subset = df_compare[df_compare['Class'] == cls]
-            sns.regplot(
-                data=subset,
-                x=area_col,
-                y=spike_col,
-                scatter=True,
-                label=cls,
-                ax=ax,
-                scatter_kws={'alpha': 0.6},
-                line_kws={'linewidth': 1.5}
-            )
-            try:
-                r, p = pearsonr(subset[area_col], subset[spike_col])
-                results.append({'Method': title, 'Class': cls, 'Pearson_r': r, 'p_value': p})
-            except Exception as e:
-                print(f"Pearson error: {e}")
-                results.append({'Method': title, 'Class': cls, 'Pearson_r': None, 'p_value': None})
+        for i, (area_col, spike_col, title, ax) in enumerate([
+            ('Body Area Manual', 'Spike Area Manual', 'Manual' + (' (Log)' if log else ''), axes[0]),
+            ('Body Area Automatic', 'Spike Area Automatic', 'Automatic' + (' (Log)' if log else ''), axes[1])
+        ]):
+            for cls in ['mutant', 'wildtype']:
+                subset = df_compare[df_compare['Class'] == cls]
+                if log:
+                    sns.scatterplot(data=subset, x=area_col, y=spike_col, hue='Class', ax=ax, alpha=0.6, palette={'mutant': COLOR_MUTANT_BRIGHT, 'wildtype': COLOR_WILDTYPE})
+                    ax.set_xscale('log')
+                    ax.set_yscale('log')
+                else:
+                    sns.regplot(data=subset, x=area_col, y=spike_col, ax=ax, scatter_kws={'alpha': 0.6}, line_kws={'linewidth': 1.5}, label=cls)
 
-        ax.set_title(title)
-        ax.set_xlabel('Body Area')
-        if i == 0:
-            ax.set_ylabel('Spike Area')
-        else:
-            ax.set_ylabel('')
-        ax.legend(title='Class')
+                try:
+                    r, p = pearsonr(subset[area_col], subset[spike_col])
+                    results.append({'Method': title, 'Class': cls, 'Pearson_r': r, 'p_value': p})
+                except Exception as e:
+                    results.append({'Method': title, 'Class': cls, 'Pearson_r': None, 'p_value': None})
+                    print(f"Pearson error ({title}, {cls}): {e}")
 
-    plt.tight_layout()
-    plt.savefig(os.path.join(SAVE_DIR, f"{base_filename}_linear.png"), dpi=300, bbox_inches='tight')
-    print(f"Saved: {os.path.join(SAVE_DIR, f'{base_filename}_linear.png')}")
-    plt.show()
+            ax.set_title(title)
+            ax.set_xlabel('Body Area')
+            ax.set_ylabel('Spike Area' if i == 0 else '')
+            ax.legend(title='Class')
 
-    # Log version
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
-    for i, (area_col, spike_col, title, ax) in enumerate([
-        ('Body Area Manual', 'Spike Area Manual', 'Manual Segmentation (Log Scale)', axes[0]),
-        ('Body Area Automatic', 'Spike Area Automatic', 'Automatic Segmentation (Log Scale)', axes[1])
-    ]):
-        for cls in ['mutant', 'wildtype']:
-            subset = df_compare[df_compare['Class'] == cls]
-            sns.scatterplot(data=subset, x=area_col, y=spike_col, hue='Class', ax=ax, alpha=0.6)
-
-        ax.set_title(title)
-        ax.set_xlabel('Body Area')
-        if i == 0:
-            ax.set_ylabel('Spike Area')
-        else:
-            ax.set_ylabel('')
-        ax.set_xscale('log')
-        ax.set_yscale('log')
-        ax.legend(title='Class')
-
-    plt.tight_layout()
-    plt.savefig(os.path.join(SAVE_DIR, f"{base_filename}_logscale.png"), dpi=300, bbox_inches='tight')
-    print(f"Saved: {os.path.join(SAVE_DIR, f'{base_filename}_logscale.png')}")
-    plt.show()
+        plt.tight_layout()
+        suffix = "logscale" if log else "linear"
+        path = os.path.join(SAVE_DIR, f"{base_filename}_{suffix}.png")
+        plt.savefig(path, dpi=300, bbox_inches='tight')
+        print(f"Saved: {path}")
+        plt.show()
 
     pd.DataFrame(results).to_csv(os.path.join(SAVE_DIR, f"{base_filename}_pearson_stats.csv"), index=False)
-    print(f"Saved Pearson r statistics to {os.path.join(SAVE_DIR, f'{base_filename}_pearson_stats.csv')}")
+    print(f"Saved Pearson stats to: {os.path.join(SAVE_DIR, f'{base_filename}_pearson_stats.csv')}")
+
+# ----------------------------------------
 def export_full_morphology_stats(df_compare, SAVE_DIR, filename="all_morphology_stats.csv"):
-    columns_to_export = [
+    columns = [
         'Image_ID', 'Class',
         'Spike Area Manual', 'Body Area Manual', 'Body Perimeter Manual',
         'Spike Area Automatic', 'Body Area Automatic', 'Body Perimeter Automatic'
     ]
-    df_export = df_compare[columns_to_export].copy()
-    df_export.columns = [
-        'Image_ID', 'Class',
-        'Spike_Area_Manual', 'Body_Area_Manual', 'Body_Perimeter_Manual',
-        'Spike_Area_Auto', 'Body_Area_Auto', 'Body_Perimeter_Auto'
-    ]
+    df_export = df_compare[columns].copy()
+    df_export.columns = [col.replace(' ', '_').replace('Manual', 'Manual').replace('Automatic', 'Auto') for col in df_export.columns]
     save_path = os.path.join(SAVE_DIR, filename)
     df_export.to_csv(save_path, index=False)
     print(f"✅ Saved full morphology stats to: {save_path}")

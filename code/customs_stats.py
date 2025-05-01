@@ -141,6 +141,8 @@ def make_predictions(model, device, X_test_df, test_loader, save_cm=True, save_d
 
     print(X_test_df_preds['class'].value_counts())
     X_test_df_preds['predicted_label'].value_counts()
+
+    X_test_df_preds['correct'] = X_test_df_preds['class'] == X_test_df_preds['predicted_label']
     return X_test_df_preds
 
 
