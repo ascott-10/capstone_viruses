@@ -142,35 +142,107 @@ def build_compare_df_from_auto_manual(all_df):
 
 
 
-def compare_methods_plotting(df_compare):
-    df_long = df_compare.melt(
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+import pandas as pd
+from scipy.stats import mannwhitneyu
+import numpy as np
+
+from code.config import (
+    COLOR_MUTANT_BRIGHT, COLOR_WILDTYPE,
+    FONT_SIZE, FONT_SIZE_TITLE, FONT_SIZE_LABEL, FONT_SIZE_TICK,
+    SAVE_DPI, SAVE_DIR
+)
+
+def add_stat_annotation(ax, data, y_col, group_col, class_col, color):
+    classes = data[class_col].unique()
+    for class_val in classes:
+        subset = data[data[class_col] == class_val]
+        group1 = subset[subset[group_col] == f'{y_col} Manual'][y_col]
+        group2 = subset[subset[group_col] == f'{y_col} Automatic'][y_col]
+        stat, p = mannwhitneyu(group1, group2, alternative='two-sided')
+
+        # Determine position for annotation
+        max_y = max(subset[y_col].max(), 1e-6)
+        y = max_y * 1.2
+        x1, x2 = 0, 1
+        ax.plot([x1, x2], [y, y], lw=1.5, color=color)
+        ax.text((x1 + x2) / 2, y * 1.05, f"p = {p:.3e}", ha='center', fontsize=FONT_SIZE_TICK, color=color)
+        print(f"{y_col} ({class_val}): p = {p:.3e}")
+
+def compare_spike_and_body_plotting(df_compare):
+    df_spike = df_compare.melt(
         id_vars=['Image_ID', 'Class'],
         value_vars=['Spike Area Manual', 'Spike Area Automatic'],
         var_name='Method',
         value_name='Spike Area'
-    ) 
+    )
 
-    fig, ax = plt.subplots(1, 2, figsize=(14, 6))
+    df_body = df_compare.melt(
+        id_vars=['Image_ID', 'Class'],
+        value_vars=['Body Area Manual', 'Body Area Automatic'],
+        var_name='Method',
+        value_name='Body Area'
+    )
 
-    sns.swarmplot(data=df_long, x='Class', y='Spike Area', hue='Method',
-                  dodge=True, alpha=0.6, size=3, ax=ax[0])
-    ax[0].set_title('Spike Area by Method and Class')
-    ax[0].set_ylabel("Spike Area (log scale)")
-    ax[0].set_xlabel('Class')
-    ax[0].set_yscale("log")
-    ax[0].legend(loc='lower center', bbox_to_anchor=(0.5, -0.25), ncol=2, frameon=False)
+    class_palette = {
+        'mutant': COLOR_MUTANT_BRIGHT,
+        'wildtype': COLOR_WILDTYPE
+    }
 
-    sns.swarmplot(data=df_long, x='Method', y='Spike Area', hue='Class', 
-                  dodge=True, alpha=0.6, size=3, ax=ax[1])
-    ax[1].set_title('Spike Area by Class and Method')
-    ax[1].set_ylabel("Spike Area (log scale)")
-    ax[1].set_xlabel('Method')
-    ax[1].set_yscale("log")
-    ax[1].legend(loc='lower center', bbox_to_anchor=(0.5, -0.25), ncol=2, frameon=False)
+    fig, axs = plt.subplots(1, 2, figsize=(14, 6))
+    sns.set_context("notebook", font_scale=1.2)
+
+    # Spike Area Plot
+    sns.stripplot(
+        data=df_spike,
+        x='Method',
+        y='Spike Area',
+        hue='Class',
+        dodge=True,
+        alpha=0.7,
+        size=5,
+        palette=class_palette,
+        jitter=True,
+        ax=axs[0]
+    )
+    axs[0].set_yscale("log")
+    axs[0].set_title('Spike Area by Method', fontsize=FONT_SIZE_TITLE)
+    axs[0].set_ylabel("Spike Area (log scale)", fontsize=FONT_SIZE_LABEL)
+    axs[0].set_xlabel("Segmentation Method", fontsize=FONT_SIZE_LABEL)
+    axs[0].tick_params(labelsize=FONT_SIZE_TICK)
+    axs[0].legend_.remove()
+    add_stat_annotation(axs[0], df_spike, 'Spike Area', 'Method', 'Class', 'black')
+
+    # Body Area Plot
+    sns.stripplot(
+        data=df_body,
+        x='Method',
+        y='Body Area',
+        hue='Class',
+        dodge=True,
+        alpha=0.7,
+        size=5,
+        palette=class_palette,
+        jitter=True,
+        ax=axs[1]
+    )
+    axs[1].set_yscale("log")
+    axs[1].set_title('Body Area by Method', fontsize=FONT_SIZE_TITLE)
+    axs[1].set_ylabel("Body Area (log scale)", fontsize=FONT_SIZE_LABEL)
+    axs[1].set_xlabel("Segmentation Method", fontsize=FONT_SIZE_LABEL)
+    axs[1].tick_params(labelsize=FONT_SIZE_TICK)
+    axs[1].legend(title='Class', frameon=False, fontsize=FONT_SIZE, title_fontsize=FONT_SIZE_LABEL, loc='upper right')
+    add_stat_annotation(axs[1], df_body, 'Body Area', 'Method', 'Class', 'black')
 
     plt.tight_layout()
-    plt.savefig("spike_area_comparison.png", dpi=300, bbox_inches='tight')
+
+    save_path = os.path.join(SAVE_DIR, "spike_and_body_area_comparison.png")
+    plt.savefig(save_path, dpi=SAVE_DPI, bbox_inches='tight')
+    print(f"✅ Plot with stats saved to: {save_path}")
     plt.show()
+
 
 
 import os

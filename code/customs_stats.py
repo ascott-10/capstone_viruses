@@ -145,20 +145,27 @@ def make_predictions(model, device, X_test_df, test_loader, save_cm=True, save_d
 
 
 
+from sklearn.metrics import classification_report
+
 def display_stats(X_test_df_preds):
     y_test = X_test_df_preds['class']
     y_pred = X_test_df_preds['predicted_label']
-    acc_ls = []
-    prec_ls = []
-    recall_ls = []
-    f1_score_ls = []
-    acc_ls.append(accuracy_score(y_test, y_pred))
-    prec_ls.append(precision_score(y_test, y_pred, average='weighted', zero_division=0))
-    recall_ls.append(recall_score(y_test, y_pred, average='weighted', zero_division=0))
-    f1_score_ls.append(f1_score(y_test, y_pred, average='weighted', zero_division=0))
+
+    print("📊 Classification Report:")
+    print(classification_report(y_test, y_pred, digits=4))
+
+    acc = accuracy_score(y_test, y_pred)
+    prec = precision_score(y_test, y_pred, average='weighted', zero_division=0)
+    recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
+    f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
+
     scores_df = pd.DataFrame({
-        'Accuracy': acc_ls,
-        'Precision': prec_ls,
-        'Recall': recall_ls,
-        'F1 Score': f1_score_ls})
+        'Accuracy': [acc],
+        'Precision': [prec],
+        'Recall': [recall],
+        'F1 Score': [f1]
+    })
+
+    print("\n✅ Summary Metrics:")
     print(scores_df)
+    return scores_df

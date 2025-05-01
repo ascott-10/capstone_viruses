@@ -218,7 +218,7 @@ all_df = compare_combine_dfs(convert_df, SEGMENTED_MASKS_WT, SEGMENTED_MASKS_MUT
 df_compare = build_compare_df_from_auto_manual(all_df)
 
 df_wide = compare_methods_stats(df_compare, SAVE_DIR, plot_yes=True)
-compare_methods_plotting(df_compare)
+compare_spike_and_body_plotting(df_compare)
 
 df_wide, stat, p, summary = compare_methods_stats(df_compare, SAVE_DIR, plot_yes=True)
 df_wide.to_csv(os.path.join(SAVE_DIR, "comparison_results.csv"), index=False)
