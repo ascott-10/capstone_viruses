@@ -19,7 +19,9 @@ if ENVIRONMENT == "school":
     AUTO_SEGMENTED_MASKS_WT = '/home/ariellescott/Documents/capstone/segmented_ims/'
     AUTO_SEGMENTED_MASKS_MUT = '/home/ariellescott/Documents/capstone/segmented_ims/'
     SAVE_DIR = '/home/ariellescott/Documents/capstone/capstone_viruses/results/'
+    PREDICTION_SAVE_DIR = os.path.join(SAVE_DIR, "predictions")
     INPUT_DIR = '/home/ariellescott/Documents/capstone/capstone_viruses/results/'
+
     convert_df = pd.read_excel('/home/ariellescott/Documents/capstone/capstone_viruses/results/Segmentation_Progress.xlsx', usecols = [0,1]) 
 
 elif ENVIRONMENT == "home":
@@ -30,6 +32,7 @@ elif ENVIRONMENT == "home":
     AUTO_SEGMENTED_MASKS_WT = '/home/ascott10/documents/projects/capstone_viruses/segmented_images/segment_ver2/'
     AUTO_SEGMENTED_MASKS_MUT = '/home/ascott10/documents/projects/capstone_viruses/segmented_images/segment_ver2/'
     SAVE_DIR = '/home/ascott10/documents/projects/capstone_viruses/data/'
+    PREDICTION_SAVE_DIR = os.path.join(SAVE_DIR, "predictions")
     INPUT_DIR = '/home/ascott10/documents/projects/capstone_viruses/data/'
     convert_df = pd.read_excel('/home/ascott10/documents/projects/capstone_viruses/data/Segmentation_Progress.xlsx', usecols = [0,1]) 
 
