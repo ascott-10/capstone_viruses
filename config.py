@@ -73,3 +73,21 @@ SAVE_DPI = 300
 # For classifier confusion matrix (mutant vs wildtype)
 CONFUSION_MATRIX_CMAP = ["#F48FB1", "#66BB6A"]  # pink to green
 
+# ======== PATHS TO SAVED MODELS ========
+BEST_UNET_PATH = os.path.join(SAVE_DIR, "best_unet.pt")
+RESNET_WEIGHT_PATTERN = os.path.join(SAVE_DIR, "resnet_weights_*.pth")
+
+# ======== MODEL CLASSES ========
+CLASS_NAMES = ["wildtype", "mutant"]
+NUM_CLASSES = len(CLASS_NAMES)
+
+# ======== OUTPUT FILES ========
+COMPARE_CSV_FILENAME = "comparison_results.csv"
+MORPHOLOGY_CSV_FILENAME = "all_component_areas.csv"
+
+# ======== PLOTTING TOGGLE ========
+PLOT_RESULTS = True
+
+# ======== TRANSFORM NORMALIZATION (optional) ========
+NORMALIZE_MEAN = 0.5
+NORMALIZE_STD = 0.5

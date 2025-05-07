@@ -1,28 +1,24 @@
-import numpy as np
-import pandas as pd
 import os
 import sys
-import pathlib
-from pathlib import Path
+import numpy as np
+import pandas as pd
+import torch
+import torch.nn as nn
+import cv2
+from PIL import Image
 from datetime import datetime
+from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-import cv2
-import PIL
-from PIL import Image
-
-import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import models, transforms
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
-from code.config import *
+from config import *
 
-# Extend path for local modules
 sys.path.append("..")
-sys.path.append('./code')
+sys.path.append("./code")
 
 print(torch.__version__)
 

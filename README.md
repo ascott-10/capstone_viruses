@@ -2,197 +2,102 @@
 
 ## Description
 
-This repository contains a pipeline to perform segmentation and morphological analysis on EM images of viruses using Meta AI's Segment Anything Model (SAM) and classification using a ResNet18-based model. The goal is to isolate the viral body and spikes, compute relevant features (area, perimeter), and classify viral images as wildtype or mutant based on morphology.
+This repository contains a pipeline to perform segmentation and morphological analysis on EM images of viruses using a U-Net model and a ResNet18-based classifier. It isolates viral structures (body and spikes), extracts morphological features, and classifies viral particles as wildtype or mutant.
 
 ## Repository Structure
 
-- `main_sam_pipeline.py`: Segments raw EM images using SAM and computes morphology statistics  
-- `main_classify_pipeline.py`: Classifies segmented images into wildtype or mutant  
-- `code/`: Contains modular functions for data processing, model training, and image transformation  
+- `main.py`: Full end-to-end pipeline: segmentation, classification, morphology, and evaluation
+- `main_sam_pipeline.py`: Alternative pipeline using Segment Anything (SAM) for segmentation
+- `main_classify_pipeline.py`: Classification from pre-segmented masks
+- `code/`: Core functionality
   - `input_files.py`: Builds dataframe of image paths and labels  
-  - `sam_configure.py`: Loads pretrained SAM model and sets hyperparameters  
-  - `segment_workflow.py`: Segmentation, cropping, feature extraction, and saving  
-  - `setup_classifier.py`: Loads images, applies transformations, splits into datasets  
-  - `train_classifier.py`: Defines model and training logic  
-  - `morphology.py`: Morphology analysis and segmentation comparison  
-  - `customs_stats.py`: Classifier loading, prediction, and evaluation helpers  
-- `raw_images/`: Input folders for wildtype and mutant virus images  
-- `segmented_images/`: Output locations for final segmented masks  
-- `results/`: Stores CSVs of segmentation outputs and comparison results  
-- `data/`: CSVs for train/test/val splits and ResNet model weights  
+  - `unet_model.py`: U-Net architecture  
+  - `unet_training.py`: U-Net training, validation, model saving  
+  - `unet_training_setup.py`: Dataset loading and preprocessing for segmentation  
+  - `setup_classifier.py`: Data transforms, loading, and dataset splitting  
+  - `train_classifier.py`: ResNet classifier training  
+  - `customs_stats.py`: Evaluation helpers and confusion matrix  
+  - `morphology.py`: Morphology extraction and analysis  
+  - `spike_morpohology.py`: Spike-specific analysis  
+  - `compare_segmentation_methods.py`: Manual vs automatic segmentation comparison
+- `raw_images/`: Input EM images (wildtype and mutant)
+- `segmented_images/`: Output binary masks (manual and auto)
+- `results/`: Output plots, statistics, and evaluation summaries
+- `data/`: Train/test/val splits and model weights
 
 ## Installation
 
-```bash
 git clone https://github.com/ascott-10/capstone-viruses.git
 cd capstone-viruses
 pip install -r requirements.txt
-```
 
-## Other Requirements
+## Requirements
 
-- Install Segment Anything from https://github.com/facebookresearch/segment-anything/
-- Download `sam_vit_h_4b8939.pth` checkpoint and place it in the appropriate directory
-
-## System Requirements
-
-- Ubuntu 22.04  
-- Python 3.12  
-- CUDA 12.4  
-- PyTorch 2.1  
-- NVIDIA GPU (e.g. RTX 3090)
+Ubuntu 22.04  
+Python 3.12  
+PyTorch 2.1  
+CUDA 12.4  
+NVIDIA GPU (recommended: RTX 3090)  
+(Optional) Segment Anything setup from: https://github.com/facebookresearch/segment-anything/
 
 ---
 
-# Usage Instructions
+# Full Pipeline Usage
 
-## Raw Images ➔ Segmented Masks
+## 1. Run Main Script
 
-### 1. Build the input DataFrame
+python main.py
 
-```python
-from code.input_files import make_input_df
-df = make_input_df('/path/to/raw_images/')
-```
-
-### 2. Configure and run SAM
-
-```python
-from code.sam_configure import download_sam, custom_mask
-sam = download_sam()
-mask_generator = custom_mask(sam)
-```
-
-### 3. Segment and postprocess images
-
-```python
-from code.segment_workflow import run_segmentation_pipeline
-run_segmentation_pipeline(df, mask_generator, save_dir='segmented_images/sam_segment_ver3/')
-```
-
-### 4. Outputs
-
-- Segmented grayscale masks → `segmented_images/sam_segment_ver3/`
-- Per-component stats → `results/all_component_areas.csv`
-- Per-image spike counts → `results/sam_summary_results_2.csv`
-
----
-
-## Segmented Masks ➔ Morphology Comparison
-
-### 1. Extract morphology from two segment sets
-
-```python
-from code.morphology import make_morphology_df
-
-df_sam = make_morphology_df('segmented_images/segment_ver2')
-df_manual = make_morphology_df('segmented_images/sam_segment_ver1')
-```
-
-### 2. Compare per-image spike areas
-
-```python
-from code.morphology import compare_methods
-
-df_compare = compare_methods(
-    method_a_dir='segmented_images/segment_ver2',
-    method_b_dir='segmented_images/sam_segment_ver1',
-    suffix_a=r'_seg_ver2$',
-    suffix_b=r'_seg$'
-)
-
-df_compare.to_csv('results/df_compare.csv')
-```
-
----
-
-## Segmented Masks ➔ Classification
-
-### 1. Prepare train/test/val splits
-
-```python
-from code.setup_classifier import load_segmented_ims, create_and_save_new_df
-
-df = load_segmented_ims('segmented_images/segment_ver2')
-create_and_save_new_df(df, save_dir='data/', timestamp='20250421', stratify=True)
-```
-
-### 2. Transform images and load into DataLoader
-
-```python
-from code.setup_classifier import transform_data, create_tensor_dataset, create_dataloader
-import pandas as pd
-
-train_df = pd.read_csv('data/train_20250421_151833.csv')
-val_df = pd.read_csv('data/val_20250421_151833.csv')
-test_df = pd.read_csv('data/test_20250421_151833.csv')
-
-train_tfm, val_tfm = transform_data(image_size=(256, 256))
-
-train_dataset = create_tensor_dataset(train_df, train_tfm)
-val_dataset = create_tensor_dataset(val_df, val_tfm)
-test_dataset = create_tensor_dataset(test_df, val_tfm)
-
-train_loader = create_dataloader(train_dataset, batch_size=64)
-val_loader = create_dataloader(val_dataset, batch_size=64)
-test_loader = create_dataloader(test_dataset, batch_size=32)
-```
-
-### 3. Train the classifier
-
-```python
-from code.train_classifier import load_classifier, train_model
-import torch
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model = load_classifier(device=device, num_classes=2)
-train_model(model, device, train_loader, val_loader, save_dir='data/')
-```
-
----
-
-## Evaluate Trained Classifier on Test Set
-
-### 1. Load pretrained model and test set
-
-```python
-from code.customs_stats import load_resnet_weights, make_test_data
-
-from torchvision import models
-pre_trained_model = models.resnet18(pretrained=False)
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
-model = load_resnet_weights(pre_trained_model, save_dir='data', device=device, num_classes=2)
-
-X_test_df, test_dataset, test_loader = make_test_data(
-    dataframe=None,
-    csv_path=None,
-    csv_dir='data',
-    pattern='test_*.csv'
-)
-```
-
-### 2. Run prediction and display stats
-
-```python
-from code.customs_stats import make_predictions, display_stats
-
-X_test_df_preds = make_predictions(model, device, X_test_df, test_loader)
-display_stats(X_test_df_preds)
-```
-
----
+Main script performs:
+- Loads and optionally subsamples raw and segmented image metadata
+- Loads or trains U-Net model on image/mask pairs
+- Evaluates model on held-out set and visualizes mask predictions
+- Loads or trains ResNet classifier on segmented masks
+- Extracts morphology from masks
+- Compares morphology across wildtype and mutant
+- Compares manual vs automatic segmentation methods
+- Saves plots and results
 
 ## Output Files
 
-- Segmented images → `segmented_images/sam_segment_ver3/`
-- Per-component morphology → `results/all_component_areas.csv`
-- Spike summary per image → `results/sam_summary_results_2.csv`
-- Comparison of methods → `results/df_compare.csv`
-- Model weights → `data/resnet_weights_*.pth`
-- Dataset splits → `data/train_*.csv`, `val_*.csv`, `test_*.csv`
+Segmented masks → segmented_images/  
+Morphology statistics → results/all_component_areas.csv  
+Per-image spike stats → results/sam_summary_results_2.csv  
+Classifier confusion matrix → results/confusion_matrix.png  
+Manual vs automatic comparison → results/comparison_results.csv  
+Train/test/val splits → data/train_*.csv, val_*.csv, test_*.csv  
+Model weights → data/best_unet.pt, data/resnet_weights_*.pth
 
----
+## Sample Usage
+
+### Build Segmentation Dataset
+
+from code.unet_training_setup import *
+X_raw, X_seg, labels = load_images_from_dataframe(df, ...)
+train_dataset = create_segmentation_tensor_dataset(X_raw, X_seg, labels)
+train_loader = create_dataloader(train_dataset, batch_size=32)
+
+### Train U-Net
+
+from code.unet_model import UNet
+model = UNet(input_channels=1, output_channels=1).to(device)
+
+from code.unet_training import *
+train_model(...)  # see main.py for full loop
+
+### Extract Morphology and Compare
+
+from code.morphology import ground_truth_morph, calculate_spike_stats, compare_classes_stats
+df = ground_truth_morph(df)
+calculate_spike_stats(df, plot_yes=True)
+compare_classes_stats(df, plot_yes=True)
+
+### Classify Segmented Images
+
+from code.customs_stats import load_resnet_weights, make_predictions
+model = load_resnet_weights(model, save_dir='data', device=device)
+X_test_df_preds = make_predictions(model, device, X_test_df, test_loader, save_cm=True)
+
 ## Citation
 
-Alexander Kirillov, Eric Mintun, Nikhila Ravi, Hanzi Mao, Chloe Rolland, Laura Gustafson, Tete Xiao, Spencer Whitehead, Alexander C. Berg, Wan-Yen Lo, Piotr Dollár, and Ross Girshick. Segment Anything. *arXiv preprint arXiv:2304.02643*, 2023.
+Alexander Kirillov, Eric Mintun, Nikhila Ravi, Hanzi Mao, Chloe Rolland, Laura Gustafson, Tete Xiao, Spencer Whitehead, Alexander C. Berg, Wan-Yen Lo, Piotr Dollár, and Ross Girshick. Segment Anything. arXiv:2304.02643, 2023.

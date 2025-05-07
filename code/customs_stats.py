@@ -1,39 +1,30 @@
-import numpy as np
-import pandas as pd
-
 import os
 import sys
-sys.path.append("..")
-sys.path.append('./code')
-import pathlib
-from pathlib import Path
-
-import cv2
-import PIL
-from PIL import Image
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
-import torch
-from torchvision import transforms
-from torch.utils.data import TensorDataset, DataLoader
-
-import torch
-from sklearn.metrics import confusion_matrix
-
-import os
-import torch
-from torchvision import models
 import glob
-
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from sklearn.preprocessing import LabelEncoder
+import torch
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 import seaborn as sns
-from code.setup_classifier import load_segmented_ims, transform_data, create_tensor_dataset, create_dataloader, create_and_save_new_df
+import cv2
+from PIL import Image
+from pathlib import Path
+from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, precision_score, recall_score, f1_score
+from sklearn.preprocessing import LabelEncoder
+from torchvision import models, transforms
+from torch.utils.data import TensorDataset, DataLoader
+import torch.nn as nn
+
+from config import *
+from code.setup_classifier import (
+    load_segmented_ims,
+    transform_data,
+    create_tensor_dataset,
+    create_dataloader,
+    create_and_save_new_df
+)
 
 print(torch.__version__)
-
-import torch.nn as nn
-from torchvision import models
 
 def load_resnet_weights(model, save_dir, device, save_path=None, num_classes=2):
     model.fc = nn.Sequential(
@@ -110,8 +101,7 @@ def make_predictions(model, device, X_test_df, test_loader, save_cm=True, save_d
         labels=labels
     )
 
-    # ✅ Clean green-themed confusion matrix
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=(7, 7))
     sns.heatmap(
         cm,
         annot=True,
@@ -121,15 +111,15 @@ def make_predictions(model, device, X_test_df, test_loader, save_cm=True, save_d
         yticklabels=labels,
         cbar=False,
         square=True,
-        linewidths=0.5,
+        linewidths=0.7,
         linecolor='gray',
-        ax=ax
+        ax=ax,
+        annot_kws={"size": FONT_SIZE + 6}
     )
-
-    ax.set_xlabel('Predicted Label', fontsize=13)
-    ax.set_ylabel('True Label', fontsize=13)
-    ax.set_title('Confusion Matrix', fontsize=15)
-    ax.tick_params(labelsize=11)
+    ax.set_xlabel('Predicted Label', fontsize=FONT_SIZE_LABEL + 4, labelpad=10)
+    ax.set_ylabel('True Label', fontsize=FONT_SIZE_LABEL + 4, labelpad=10)
+    ax.set_title('Confusion Matrix', fontsize=FONT_SIZE_TITLE + 6, pad=15)
+    ax.tick_params(labelsize=FONT_SIZE_TICK + 6)
 
     plt.tight_layout()
     if save_cm and save_dir:
@@ -144,10 +134,6 @@ def make_predictions(model, device, X_test_df, test_loader, save_cm=True, save_d
 
     X_test_df_preds['correct'] = X_test_df_preds['class'] == X_test_df_preds['predicted_label']
     return X_test_df_preds
-
-
-
-from sklearn.metrics import classification_report
 
 def display_stats(X_test_df_preds):
     y_test = X_test_df_preds['class']

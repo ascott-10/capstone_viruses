@@ -1,40 +1,26 @@
-import numpy as np
-import pandas as pd
-
 import os
 import sys
-sys.path.append("..")
-sys.path.append('./code')
-import pathlib
-from pathlib import Path
-
-import cv2
-import PIL
-from PIL import Image
-import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
+import numpy as np
+import pandas as pd
 import torch
-from torchvision import transforms
+import cv2
+from PIL import Image
+from pathlib import Path
 from sklearn.model_selection import train_test_split
 from torch.utils.data import TensorDataset, DataLoader
-from torch.utils.data import TensorDataset, DataLoader
+from torchvision import transforms
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 
+sys.path.append("..")
+sys.path.append("./code")
 
-# Check version of Pytorch
-print(torch. __version__)
-
+print(torch.__version__)
 
 def load_segmented_ims(input_path):
-    """User inputs the folder where their segmented images are stored"""
-    
-    #Retrieve files
     image_filepaths = []
     image_labels = []
     image_ids = []
-
-
-
-    #for each file in the inputs add path to storage list:
 
     for files in os.listdir(input_path):
         if files.endswith('png'):
@@ -43,16 +29,14 @@ def load_segmented_ims(input_path):
             elif 'MHVWT' in files:
                 label = 'wildtype'
             image_labels.append(label)
-            image_filepaths.append(os.path.join(input_path,files))
+            image_filepaths.append(os.path.join(input_path, files))
             image_ids.append(Path(files).stem)
-            
 
-    all_files = pd.DataFrame([image_ids, image_filepaths, image_labels], index= ['im_id', 'file_path', 'class']).T
-    all_files['im_id'] =all_files['im_id'].str.replace('_seg_ver2','')
+    all_files = pd.DataFrame([image_ids, image_filepaths, image_labels], index=['im_id', 'file_path', 'class']).T
+    all_files['im_id'] = all_files['im_id'].str.replace('_seg_ver2', '')
     all_files_df = all_files.copy()
-    
-    print('all files loaded')
 
+    print('all files loaded')
     return all_files_df
 
 def transform_data(
@@ -63,10 +47,6 @@ def transform_data(
     scale_range=(0.9, 1.0),
     apply_augmentation=True
 ):
-    """
-    Returns train and validation transformations with configurable parameters.
-    """
-
     base_transform = [
         transforms.ToTensor(),
         transforms.Normalize(normalize_mean, normalize_std)
@@ -96,7 +76,6 @@ def transform_data(
     return train_transform, val_transform
 
 def create_tensor_dataset(df, transform):
-    """Using custom transforms for training and validation datasets"""
     images = []
     labels = []
 
@@ -110,8 +89,7 @@ def create_tensor_dataset(df, transform):
 
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, (256, 256))
-
-        img = transform(img)  # now using dynamic augmentation
+        img = transform(img)
 
         images.append(img)
         labels.append(1 if label == 'mutant' else 0)
@@ -121,49 +99,32 @@ def create_tensor_dataset(df, transform):
 
     return TensorDataset(images_tensor, labels_tensor)
 
-
 def create_dataloader(dataset, batch_size=64, shuffle=True):
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
     return data_loader
 
-import os
-import torch
-
-
 def general_save(save_dir, timestamp, filename, dataframe=None):
-    # If saving a DataFrame
     if dataframe is not None:
         save_path = os.path.join(save_dir, f"{filename}_{timestamp}.csv")
         dataframe.to_csv(save_path, index=False)
         print(f"Saved {filename} split to CSV: {save_path}")
         return save_path
-
     else:
         raise ValueError("You must provide a dataframe (for .csv).")
 
-    
-
-from sklearn.model_selection import train_test_split
-
 def create_and_save_new_df(input_images_df, timestamp, save_dir, stratify=True):
-    # Determine whether to stratify
     stratify_labels = input_images_df['class'] if stratify else None
 
-    # Train/test split → 80% train, 20% test
     X_train_df, X_test_df = train_test_split(
         input_images_df, test_size=0.2, stratify=stratify_labels, random_state=42
     )
 
-    # Train/val split from training data → 75% train, 25% val (so final is 60/20/20)
     X_train_df, X_val_df = train_test_split(
         X_train_df, test_size=0.25, stratify=stratify_labels.loc[X_train_df.index] if stratify else None, random_state=42
     )
 
-    # Save all splits
     general_save(save_dir, timestamp, filename="train", dataframe=X_train_df)
     general_save(save_dir, timestamp, filename="val", dataframe=X_val_df)
     general_save(save_dir, timestamp, filename="test", dataframe=X_test_df)
 
     return X_train_df, X_test_df, X_val_df
-
-

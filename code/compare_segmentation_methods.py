@@ -120,19 +120,18 @@ def compare_spike_and_body_plotting(df_compare):
     import seaborn as sns
     import os
 
-    sns.set_context("notebook", font_scale=1.5)  # ⬅️ Increase overall font scale
+    sns.set_context("notebook")  # We'll set font sizes manually
 
     # Define melt operations
     melt_params = [
-    ("Spike Area", "Spike Area Manual", "Spike Area Automatic"),
-    ("Body Area", "Body Area Manual", "Body Area Automatic"),
-    ("Body Perimeter", "Body Perimeter Manual", "Body Perimeter Automatic"),
-]
-
+        ("Spike Area", "Spike Area Manual", "Spike Area Automatic"),
+        ("Body Area", "Body Area Manual", "Body Area Automatic"),
+        ("Body Perimeter", "Body Perimeter Manual", "Body Perimeter Automatic"),
+    ]
 
     class_palette = {'mutant': COLOR_MUTANT_BRIGHT, 'wildtype': COLOR_WILDTYPE}
 
-    fig, axs = plt.subplots(2, 2, figsize=(16, 12))  # ⬅️ 2x2 layout for 4 plots
+    fig, axs = plt.subplots(2, 2, figsize=(18, 13))  # Slightly wider for legend
     axs = axs.flatten()
 
     for idx, (label, manual_col, auto_col) in enumerate(melt_params):
@@ -150,33 +149,52 @@ def compare_spike_and_body_plotting(df_compare):
             y=label,
             hue='Class',
             dodge=True,
-            alpha=0.7,
-            size=5,
+            alpha=0.8,
+            size=6,
             palette=class_palette,
             jitter=True,
             ax=ax
         )
 
         ax.set_yscale("log")
-        ax.set_title(f'{label}', fontsize=FONT_SIZE_TITLE + 2)
-        ax.set_ylabel(f"{label} (log scale)", fontsize=FONT_SIZE_LABEL + 2)
-        ax.set_xlabel("Segmentation Method", fontsize=FONT_SIZE_LABEL + 2)
-        ax.tick_params(labelsize=FONT_SIZE_TICK + 2)
+        ax.set_title(f'{label}', fontsize=FONT_SIZE_TITLE + 4)
+        ax.set_ylabel(f"{label} (log scale)", fontsize=FONT_SIZE_LABEL + 4)
+        ax.set_xlabel("Segmentation Method", fontsize=FONT_SIZE_LABEL + 4)
+        ax.tick_params(labelsize=FONT_SIZE_TICK + 4)
 
-        if idx == 3:  # only last plot gets legend
-            ax.legend(title='Class', frameon=False, fontsize=FONT_SIZE + 2,
-                      title_fontsize=FONT_SIZE_LABEL + 2, loc='upper right')
-        else:
-            if ax.legend_:
-                ax.legend_.remove()
+        if ax.legend_:
+            ax.legend_.remove()  # remove all individual legends
 
-        #add_stat_annotation(ax, df_melted, label, 'Method', 'Class', 'black')
+    # Get legend handles and original labels from the first plot
+    handles, labels = axs[0].get_legend_handles_labels()
 
-    plt.tight_layout()
+    # Rename labels for display
+    labels = ['Wild type' if l == 'wildtype' else 'Mutant' if l == 'mutant' else l for l in labels]
+
+    # Put the legend in the unused 4th subplot
+    axs[3].legend(
+        handles,
+        labels,
+        title='Class',
+        title_fontsize=FONT_SIZE_LABEL + 4,
+        fontsize=FONT_SIZE + 4,
+        loc='center',
+        frameon=True,
+        edgecolor='black'
+    )
+    axs[3].axis('off')  # Hide axes in that subplot
+
+    # Adjust the layout to leave space for the legend box
+    plt.tight_layout(rect=[0, 0, 0.90, 1])
+
+    
+
+    
     save_path = os.path.join(SAVE_DIR, "spike_body_area_perimeter_comparison.png")
     plt.savefig(save_path, dpi=SAVE_DPI, bbox_inches='tight')
     print(f"✅ Plot with stats saved to: {save_path}")
     plt.show()
+
 
 
 # ----------------------------------------
