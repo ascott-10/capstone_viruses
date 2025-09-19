@@ -1,48 +1,46 @@
-
 ################ Import Libraries ################
-import numpy as np
-import pandas as pd
-
 import os
-import sys
-sys.path.append("..")
-sys.path.append('./code')
-import pathlib
-from pathlib import Path
-
-import cv2
-import PIL
-from PIL import Image
+import pandas as pd
+import seaborn as sns
 import matplotlib.pyplot as plt
-from matplotlib.patches import Rectangle
 
-import pandas as pd
-import glob
-import os
+from config import *
+from code.analyze_all import (
+    analyze_dataset,
+    summarize_results,
+    plot_kde_comparisons
+)
 
-import os
-import pandas as pd
-import pathlib
-from pathlib import Path
+################ Setup ################
 
-import torch
-from torchvision import models
-from torch.utils.data import TensorDataset, DataLoader
-from torch.optim.lr_scheduler import StepLR
-from sklearn.model_selection import train_test_split
+# collect mutant and wildtype segmented image files
+mutant_files = [os.path.join(SEGMENTED_MASKS_MUT, f) 
+                for f in os.listdir(SEGMENTED_MASKS_MUT) 
+                if f.lower().endswith((".png", ".tif", ".jpg"))]
 
-from datetime import datetime
+wt_files = [os.path.join(SEGMENTED_MASKS_WT, f) 
+            for f in os.listdir(SEGMENTED_MASKS_WT) 
+            if f.lower().endswith((".png", ".tif", ".jpg"))]
 
+################ Run Analysis ################
 
-import paramiko #For remote GPU support
+results = []
+analyze_dataset(mutant_files, "mutant", results)
+analyze_dataset(wt_files, "wildtype", results)
 
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-save_dir = '/home/ascott10/documents/projects/capstone_viruses/results'
+# convert results → DataFrame
+df = pd.DataFrame(results)
 
-############# Get stats for automatics (SAM) pipeline ###############
+# save raw morphology stats
+out_csv = os.path.join(TABLES_DIR, "all_distance_data.csv")
+df.to_csv(out_csv, index=False)
+print(f"Saved raw data to {out_csv}")
 
-from code.spike_morpohology import extract_morphology, morphology_df_with_spikes
-#segmented_image_path_sam = '/home/ascott10/documents/projects/capstone_viruses/segmented_images/segment_ver2'
-df_summary_sam = morphology_df_with_spikes(segmented_image_path_sam)
+# summary statistics
+summary = summarize_results(df)
+out_sum = os.path.join(TABLES_DIR, "summary_stats.csv")
+summary.to_csv(out_sum, index=False)
+print(f"Saved summary stats to {out_sum}")
 
-print(df_summary_sam)
+# plots
+plot_kde_comparisons(df, FIGURES_DIR)
